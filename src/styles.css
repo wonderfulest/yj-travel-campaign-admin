@@ -434,6 +434,50 @@ select[multiple] {
   margin-bottom: 18px;
 }
 
+.dashboard-analysis-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 18px;
+}
+
+.status-breakdown,
+.segment-readiness-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.status-breakdown span,
+.segment-readiness-list button {
+  border: 1px solid #dce4eb;
+  border-radius: 7px;
+  padding: 9px 10px;
+  background: #f8fafb;
+  color: #44515f;
+  font-size: 12px;
+  font-weight: 850;
+  text-align: left;
+}
+
+.segment-readiness-list button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.segment-readiness-list strong {
+  color: #0f766e;
+}
+
+.panel-note {
+  margin: 12px 0 0;
+  color: #667686;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.6;
+}
+
 .country-stat-list {
   display: grid;
   gap: 10px;
@@ -2027,6 +2071,10 @@ td span {
     grid-template-columns: 1fr;
   }
 
+  .dashboard-analysis-grid {
+    grid-template-columns: 1fr;
+  }
+
   .main-grid.with-detail {
     grid-template-columns: 1fr;
   }
@@ -2103,6 +2151,10 @@ td span {
 
   .stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-analysis-grid .result-list.expanded {
+    grid-template-columns: 1fr;
   }
 
   .country-stat-row {

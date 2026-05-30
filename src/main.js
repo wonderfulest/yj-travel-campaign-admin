@@ -131,6 +131,7 @@ const state = reactive({
     hasPrevious: false
   },
   segments: [],
+  segmentSummary: stateTokenIsDemo() ? summarizeSegments([], demoCustomers) : null,
   segmentPage: {
     page: 0,
     size: 20,
@@ -429,9 +430,9 @@ const stats = computed(() => {
   return [
     { label: '客户总数', value: summary.totalCustomers, icon: Users, target: 'customers' },
     { label: '有邮箱客户', value: summary.customersWithEmail, icon: Mail, target: 'customers' },
+    { label: '可触达客户', value: summary.reachableCustomers || 0, icon: Send, target: 'customers' },
     { label: '待验证邮箱', value: summary.pendingEmailCustomers, icon: CheckCircle2, target: 'customers' },
     { label: '待 Mapping', value: state.mappingPreview?.unmappedCount || 0, icon: GitMerge, target: 'customers', tool: 'mapping' },
-    { label: '已配置通道', value: state.channelPage.totalItems || state.channels.length, icon: PlugZap, target: 'channels' },
     { label: '短链点击', value: state.trackingSummary.totalClicks || 0, icon: BarChart3, target: 'tracking' }
   ].filter((item) => canAccessNav(item.target) && (!item.tool || canAccessNav(item.tool)))
 })
@@ -439,6 +440,24 @@ const customerCountryStats = computed(() => {
   const summary = state.customerSummary || summarizeCustomers(state.customers)
   return Array.isArray(summary.customersByCountry) ? summary.customersByCountry : []
 })
+const customerQualityStats = computed(() => {
+  const summary = state.customerSummary || summarizeCustomers(state.customers)
+  return Array.isArray(summary.customersByEmailQuality) ? summary.customersByEmailQuality : []
+})
+const customerContactStats = computed(() => {
+  const summary = state.customerSummary || summarizeCustomers(state.customers)
+  return Array.isArray(summary.customersByContactStatus) ? summary.customersByContactStatus : []
+})
+const customerReachabilityStats = computed(() => {
+  const summary = state.customerSummary || summarizeCustomers(state.customers)
+  return [
+    { label: '可触达客户', value: summary.reachableCustomers || 0 },
+    { label: '不可触达客户', value: summary.unreachableCustomers || 0 },
+    { label: '缺少邮箱', value: summary.missingEmailCustomers || 0 },
+    { label: '已验证邮箱', value: summary.verifiedEmailCustomers || 0 }
+  ]
+})
+const segmentReadinessStats = computed(() => state.segmentSummary || summarizeSegments(state.segments, state.customers))
 
 function campaignLifecycleIndex(status) {
   if (status === 'REVIEW_REJECTED') return 2
@@ -587,6 +606,22 @@ function displayValue(value) {
 
 function percentValue(value) {
   return `${Math.round(Number(value || 0) * 100)}%`
+}
+
+function statusLabel(status) {
+  const labels = {
+    PENDING: '待验证',
+    VERIFIED: '已验证',
+    BOUNCED: '退信',
+    MISSING: '缺失',
+    NOT_CONTACTED: '未触达',
+    READY_TO_VERIFY: '待复核',
+    CONTACTED: '已触达',
+    UNSUBSCRIBED: '已退订',
+    INVALID: '无效',
+    UNKNOWN: '未知'
+  }
+  return labels[status] || status || '未知'
 }
 
 function jsonObject(value) {
@@ -832,13 +867,49 @@ function summarizeCustomers(items) {
     const country = String(item.country || '').trim() || '未填写'
     countryCounts.set(country, (countryCounts.get(country) || 0) + 1)
   }
+  const reachableCustomers = items.filter(isReachableCustomer).length
+  const byEmailQuality = statusStats(items, 'emailQuality')
+  const byContactStatus = statusStats(items, 'contactStatus')
   return {
     totalCustomers: items.length,
     customersWithEmail: items.filter((item) => item.email).length,
     pendingEmailCustomers: items.filter((item) => item.emailQuality === 'PENDING').length,
+    verifiedEmailCustomers: items.filter((item) => item.emailQuality === 'VERIFIED').length,
+    missingEmailCustomers: items.filter((item) => !item.email).length,
+    reachableCustomers,
+    unreachableCustomers: items.length - reachableCustomers,
     customersByCountry: [...countryCounts.entries()]
       .map(([country, customers]) => ({ country, customers }))
-      .sort((left, right) => right.customers - left.customers || left.country.localeCompare(right.country))
+      .sort((left, right) => right.customers - left.customers || left.country.localeCompare(right.country)),
+    customersByEmailQuality: byEmailQuality,
+    customersByContactStatus: byContactStatus
+  }
+}
+
+function statusStats(items, key) {
+  const counts = new Map()
+  for (const item of items) {
+    const status = String(item[key] || '').trim() || 'UNKNOWN'
+    counts.set(status, (counts.get(status) || 0) + 1)
+  }
+  return [...counts.entries()]
+    .map(([status, customers]) => ({ status, customers }))
+    .sort((left, right) => right.customers - left.customers || left.status.localeCompare(right.status))
+}
+
+function isReachableCustomer(customer) {
+  if (!customer?.email) return false
+  if (customer.emailQuality === 'MISSING') return false
+  return !['UNSUBSCRIBED', 'BOUNCED', 'INVALID'].includes(customer.contactStatus)
+}
+
+function summarizeSegments(segments, customers) {
+  return {
+    segmentCount: segments.length,
+    memberCount: 0,
+    uniqueCustomerCount: 0,
+    reachableMemberCount: 0,
+    topSegments: []
   }
 }
 
@@ -1042,21 +1113,8 @@ function fillCampaignForm(campaign) {
   state.templatePreviewError = ''
 }
 
-function openCampaignDetail(campaign) {
-  fillCampaignForm(campaign)
-  state.activeNav = 'campaigns'
-  state.error = ''
-}
-
-function openCampaignList() {
-  state.activeNav = 'campaign-list'
-  state.error = ''
-  loadCampaigns()
-}
-
-function startNewCampaign() {
-  state.selectedCampaign = null
-  state.campaignForm = {
+function defaultCampaignForm() {
+  return {
     name: '先锋中国行程推广邮件',
     objective: '向海外旅行社推广 9 天 8 晚中国文化线路',
     subject: 'China Discovery from US$399+ for ${customerName}',
@@ -1073,12 +1131,33 @@ function startNewCampaign() {
     channelId: '',
     segmentIds: []
   }
+}
+
+function clearCampaignSelection() {
+  state.selectedCampaign = null
+  state.campaignForm = defaultCampaignForm()
   state.segmentDropdownOpen = false
   state.segmentDropdownQuery = ''
   state.trackingLinkDialogOpen = false
   state.templatePreviewHtml = ''
   state.templatePreviewSubject = ''
   state.templatePreviewError = ''
+}
+
+function openCampaignDetail(campaign) {
+  fillCampaignForm(campaign)
+  state.activeNav = 'campaigns'
+  state.error = ''
+}
+
+function openCampaignList() {
+  state.activeNav = 'campaign-list'
+  state.error = ''
+  loadCampaigns()
+}
+
+function startNewCampaign() {
+  clearCampaignSelection()
   state.activeNav = 'campaigns'
   state.error = ''
 }
@@ -1296,8 +1375,10 @@ async function refreshAll() {
   }
   if (canAccessNav('segments')) {
     loaders.push(loadSegments())
+    loaders.push(loadSegmentSummary())
   } else {
     state.segments = []
+    state.segmentSummary = null
   }
   if (canAccessNav('campaign-list') || canAccessNav('campaigns')) {
     loaders.push(loadCampaigns())
@@ -1331,6 +1412,19 @@ async function loadCustomerSummary() {
   } catch (error) {
     state.customerSummary = null
     state.error = `客户统计加载失败：${error.message}`
+  }
+}
+
+async function loadSegmentSummary() {
+  if (state.token === 'demo-token') {
+    state.segmentSummary = summarizeSegments(state.segments, demoCustomers)
+    return
+  }
+  try {
+    state.segmentSummary = await request('/api/segments/summary')
+  } catch (error) {
+    state.segmentSummary = null
+    state.error = `客群统计加载失败：${error.message}`
   }
 }
 
@@ -1468,12 +1562,22 @@ async function loadCampaigns(page = state.campaignPage.page) {
     const pageResult = normalizePageResult(result, [], page, state.campaignPage.size)
     state.campaigns = pageResult.items
     state.campaignPage = pageResult
+    if (state.selectedCampaign && !pageResult.items.some((item) => item.id === state.selectedCampaign.id)) {
+      clearCampaignSelection()
+    }
+    if (state.selectedCampaign) {
+      state.selectedCampaign = pageResult.items.find((item) => item.id === state.selectedCampaign.id) || null
+    }
+    if (!pageResult.items.length) {
+      clearCampaignSelection()
+    }
     if (!state.selectedCampaign && pageResult.items.length) {
       fillCampaignForm(pageResult.items[0])
     }
   } catch (error) {
     state.campaigns = []
     state.campaignPage = emptyPageResult(0, state.campaignPage.size)
+    clearCampaignSelection()
     state.error = `活动加载失败：${error.message}`
   }
 }
@@ -1920,6 +2024,10 @@ const App = {
       requiredTrackingLinkMessage: REQUIRED_TRACKING_LINK_MESSAGE,
       stats,
       customerCountryStats,
+      customerQualityStats,
+      customerContactStats,
+      customerReachabilityStats,
+      segmentReadinessStats,
       isLoggedIn,
       filteredCustomers,
       pageMeta,
@@ -1945,6 +2053,7 @@ const App = {
       campaignAdvanceTitle,
       canAccessNav,
       percentValue,
+      statusLabel,
       formatCountryShare,
       login,
       logout,
@@ -2135,6 +2244,63 @@ const App = {
             <span>{{ item.label }}</span>
             <strong>{{ item.value }}</strong>
           </button>
+        </section>
+
+        <section v-if="state.activeNav === 'dashboard'" class="main-grid dashboard-analysis-grid">
+          <article class="ops-panel">
+            <div class="panel-title">
+              <CheckCircle2 :size="19" />
+              <h3>数据质量</h3>
+            </div>
+            <dl class="result-list expanded">
+              <div v-for="item in customerQualityStats" :key="item.status">
+                <dt>{{ statusLabel(item.status) }}</dt>
+                <dd>{{ item.customers }}</dd>
+              </div>
+              <div v-if="!customerQualityStats.length">
+                <dt>暂无邮箱质量数据</dt>
+                <dd>0</dd>
+              </div>
+            </dl>
+            <div class="status-breakdown">
+              <span v-for="item in customerContactStats" :key="item.status">
+                {{ statusLabel(item.status) }} {{ item.customers }}
+              </span>
+            </div>
+          </article>
+
+          <article class="ops-panel">
+            <div class="panel-title">
+              <Send :size="19" />
+              <h3>触达准备度</h3>
+            </div>
+            <dl class="result-list expanded">
+              <div v-for="item in customerReachabilityStats" :key="item.label">
+                <dt>{{ item.label }}</dt>
+                <dd>{{ item.value }}</dd>
+              </div>
+            </dl>
+            <p class="panel-note">可触达口径：有标准化邮箱，且未退订、未退信、未标记无效，邮箱质量不是缺失。</p>
+          </article>
+
+          <article class="ops-panel">
+            <div class="panel-title">
+              <Layers :size="19" />
+              <h3>客群准备度</h3>
+            </div>
+            <dl class="result-list expanded">
+              <div><dt>客群总数</dt><dd>{{ segmentReadinessStats.segmentCount || 0 }}</dd></div>
+              <div><dt>成员记录</dt><dd>{{ segmentReadinessStats.memberCount || 0 }}</dd></div>
+              <div><dt>去重客户</dt><dd>{{ segmentReadinessStats.uniqueCustomerCount || 0 }}</dd></div>
+              <div><dt>可触达成员</dt><dd>{{ segmentReadinessStats.reachableMemberCount || 0 }}</dd></div>
+            </dl>
+            <div v-if="segmentReadinessStats.topSegments?.length" class="segment-readiness-list">
+              <button v-for="segment in segmentReadinessStats.topSegments" :key="segment.segmentId" type="button" @click="setActiveNav('segments')">
+                <span>{{ segment.segmentName }}</span>
+                <strong>{{ segment.reachableMemberCount }} / {{ segment.memberCount }}</strong>
+              </button>
+            </div>
+          </article>
         </section>
 
         <section v-if="state.activeNav === 'dashboard'" class="ops-panel dashboard-country-panel">

@@ -26,11 +26,34 @@ assert(
 )
 
 assert(
+  /request\('\/api\/segments\/summary'\)/.test(source),
+  'dashboard customer segment readiness must be loaded from /api/segments/summary'
+)
+
+assert(
   /customerCountryStats/.test(source) &&
     /customersByCountry/.test(source) &&
     /客户资产国家分布/.test(source) &&
     /country-stat-row/.test(source),
   'dashboard must render customer asset statistics grouped by country'
+)
+
+assert(
+  /customersByEmailQuality/.test(source) &&
+    /customersByContactStatus/.test(source) &&
+    /数据质量/.test(source) &&
+    /触达准备度/.test(source) &&
+    /可触达客户/.test(source) &&
+    /不可触达客户/.test(source),
+  'dashboard must render P0 customer quality and reachability analysis'
+)
+
+assert(
+  /segmentSummary/.test(source) &&
+    /客群准备度/.test(source) &&
+    /reachableMemberCount/.test(source) &&
+    /topSegments/.test(source),
+  'dashboard must render P0 customer segment readiness analysis'
 )
 
 assert(
@@ -77,6 +100,12 @@ assert(
     /function openCampaignDetail\(campaign\)[\s\S]*fillCampaignForm\(campaign\)[\s\S]*state\.activeNav = 'campaigns'/.test(source) &&
     !/<div class="campaign-list">/.test(source),
   'mail campaign list must be a standalone page with a jump action into the campaign detail editor'
+)
+
+assert(
+  /function clearCampaignSelection\(\)[\s\S]*state\.selectedCampaign = null[\s\S]*state\.campaignForm = defaultCampaignForm\(\)/.test(source) &&
+    /async function loadCampaigns\(page = state\.campaignPage\.page\) \{[\s\S]*pageResult\.items\.some\(\(item\) => item\.id === state\.selectedCampaign\.id\)[\s\S]*clearCampaignSelection\(\)[\s\S]*catch \(error\) \{[\s\S]*clearCampaignSelection\(\)/.test(source),
+  'mail campaign loading must clear selectedCampaign and stale form data when the tenant-scoped list no longer contains it'
 )
 
 assert(
