@@ -1675,6 +1675,19 @@ td span {
   margin: 0;
 }
 
+.detail-section {
+  margin-top: 12px;
+}
+
+.inline-loading {
+  border-radius: 7px;
+  padding: 9px 11px;
+  background: #eef7f5;
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 900;
+}
+
 .detail-list div {
   border-radius: 7px;
   padding: 10px 11px;
@@ -1695,6 +1708,11 @@ td span {
   font-size: 13px;
   font-weight: 800;
   line-height: 1.45;
+}
+
+.inline-token {
+  display: block;
+  margin-top: 4px;
 }
 
 .detail-list a {

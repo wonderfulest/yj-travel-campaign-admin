@@ -589,6 +589,40 @@ function percentValue(value) {
   return `${Math.round(Number(value || 0) * 100)}%`
 }
 
+function jsonObject(value) {
+  if (!value) return null
+  if (typeof value === 'object') return value
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
+}
+
+function localizedName(value) {
+  const parsed = jsonObject(value)
+  if (!parsed) return displayValue(value)
+  return parsed.zh || parsed['zh-CN'] || parsed.en || Object.values(parsed).find(Boolean) || '-'
+}
+
+function formatLanguages(languages) {
+  if (!languages?.length) return '-'
+  return languages.map((item) => localizedName(item)).filter((item) => item && item !== '-').join('、') || '-'
+}
+
+function destinationLabel(destination) {
+  if (!destination) return '-'
+  if (destination.country) return `${destination.country.id} ${localizedName(destination.country.name)}`
+  if (destination.city) return `${localizedName(destination.city.name)}${destination.city.country?.id ? ` / ${destination.city.country.id}` : ''}`
+  if (destination.worldRegion) return localizedName(destination.worldRegion.name)
+  if (destination.iataAirport) return `${destination.iataAirport.id} ${localizedName(destination.iataAirport.name)}`
+  return '-'
+}
+
+function profileAsset() {
+  return state.customerProfile?.asset || state.selectedCustomer || {}
+}
+
 function formatCountryShare(customers) {
   const total = Number((state.customerSummary || summarizeCustomers(state.customers)).totalCustomers || 0)
   if (!total) return '0%'
@@ -605,33 +639,73 @@ async function copyShortLink(url) {
   }
 }
 
-function openCustomerDetail(customer) {
+async function openCustomerDetail(customer) {
   state.selectedCustomer = customer
+  state.customerProfile = null
   state.customerEditMode = false
   state.customerEditForm = {}
+  await loadCustomerProfile(customer)
 }
 
 function closeCustomerDetail() {
   state.selectedCustomer = null
+  state.customerProfile = null
   state.customerEditMode = false
   state.customerEditForm = {}
 }
 
 function openCustomerEdit(customer) {
-  state.selectedCustomer = customer
+  const asset = customer || profileAsset()
+  state.selectedCustomer = asset
   state.customerEditMode = true
   state.customerEditForm = {
-    name: customer.name || '',
-    country: customer.country || '',
-    city: customer.city || '',
-    postcode: customer.postcode || '',
-    street: customer.street || '',
-    houseNumber: customer.houseNumber || '',
-    website: customer.website || '',
-    phone: customer.phone || '',
-    email: customer.email || '',
-    emailQuality: customer.emailQuality || 'PENDING',
-    contactStatus: customer.contactStatus || 'NOT_CONTACTED'
+    name: asset.name || '',
+    country: asset.country || '',
+    city: asset.city || '',
+    postcode: asset.postcode || '',
+    street: asset.street || '',
+    houseNumber: asset.houseNumber || '',
+    website: asset.website || '',
+    phone: asset.phone || '',
+    email: asset.email || '',
+    emailQuality: asset.emailQuality || 'PENDING',
+    contactStatus: asset.contactStatus || 'NOT_CONTACTED',
+    businessScope: asset.businessScope || state.customerProfile?.businessScope || ''
+  }
+}
+
+async function loadCustomerProfile(customer = state.selectedCustomer) {
+  if (!customer?.id) return
+  state.customerProfileLoading = true
+  try {
+    if (state.token === 'demo-token') {
+      state.customerProfile = {
+        asset: customer,
+        businessScope: customer.businessScope || '欧洲出境及中国入境定制旅行',
+        travelProfile: null,
+        destinations: [],
+        languages: [],
+        sources: []
+      }
+      return
+    }
+    state.customerProfile = await request(`/api/customers/${customer.id}/asset-profile`)
+    if (state.customerProfile?.asset) {
+      state.selectedCustomer = state.customerProfile.asset
+      replaceCustomer(state.customerProfile.asset)
+    }
+  } catch (error) {
+    state.customerProfile = {
+      asset: customer,
+      businessScope: customer.businessScope || '',
+      travelProfile: null,
+      destinations: [],
+      languages: [],
+      sources: []
+    }
+    state.error = `客户全局画像加载失败：${error.message}`
+  } finally {
+    state.customerProfileLoading = false
   }
 }
 
@@ -654,6 +728,7 @@ async function saveCustomerEdit() {
     }
     state.customerEditMode = false
     state.customerEditForm = {}
+    await loadCustomerProfile(updated)
     state.notice = '客户资产已更新'
   } catch (error) {
     state.error = error.message || '保存失败'
@@ -1263,6 +1338,13 @@ function replaceCustomer(updatedCustomer) {
   state.customers = state.customers.map((customer) => (customer.id === updatedCustomer.id ? updatedCustomer : customer))
   if (state.selectedCustomer?.id === updatedCustomer.id) {
     state.selectedCustomer = updatedCustomer
+  }
+  if (state.customerProfile?.asset?.id === updatedCustomer.id) {
+    state.customerProfile = {
+      ...state.customerProfile,
+      asset: updatedCustomer,
+      businessScope: updatedCustomer.businessScope || state.customerProfile.businessScope
+    }
   }
 }
 
@@ -1919,6 +2001,10 @@ const App = {
       normalizedWebsiteUrl,
       formatWebsiteLabel,
       displayValue,
+      localizedName,
+      formatLanguages,
+      destinationLabel,
+      profileAsset,
       openCustomerDetail,
       openCustomerEdit,
       closeCustomerDetail,
@@ -2293,44 +2379,72 @@ const App = {
 
               <!-- 查看模式 -->
               <template v-if="!state.customerEditMode">
+                <div v-if="state.customerProfileLoading" class="inline-loading">正在加载客户全局画像...</div>
                 <div class="detail-summary">
-                  <span class="status neutral">{{ state.selectedCustomer.contactStatus || 'NOT_CONTACTED' }}</span>
+                  <span class="status neutral">{{ profileAsset().contactStatus || 'NOT_CONTACTED' }}</span>
                   <label class="detail-quality-label">
                     邮箱状态
                     <select
                       class="email-quality-select"
-                      :value="state.selectedCustomer.emailQuality || 'PENDING'"
+                      :value="profileAsset().emailQuality || 'PENDING'"
                       :disabled="state.loading"
-                      @change="updateEmailQuality(state.selectedCustomer, $event.target.value)"
+                      @change="updateEmailQuality(profileAsset(), $event.target.value)"
                     >
                       <option v-for="q in EMAIL_QUALITY_OPTIONS" :key="q" :value="q">{{ q }}</option>
                     </select>
                   </label>
                 </div>
                 <dl class="detail-list">
-                  <div><dt>名称</dt><dd>{{ displayValue(state.selectedCustomer.name) }}</dd></div>
-                  <div><dt>邮箱</dt><dd>{{ displayValue(state.selectedCustomer.email) }}</dd></div>
-                  <div><dt>电话</dt><dd>{{ displayValue(state.selectedCustomer.phone) }}</dd></div>
+                  <div><dt>名称</dt><dd>{{ displayValue(profileAsset().name) }}</dd></div>
+                  <div><dt>邮箱</dt><dd>{{ displayValue(profileAsset().email) }}</dd></div>
+                  <div><dt>电话</dt><dd>{{ displayValue(profileAsset().phone) }}</dd></div>
                   <div>
                     <dt>官网</dt>
                     <dd>
-                      <a v-if="state.selectedCustomer.website" :href="normalizedWebsiteUrl(state.selectedCustomer.website)" target="_blank" rel="noopener noreferrer">
-                        {{ formatWebsiteLabel(state.selectedCustomer.website) }}
+                      <a v-if="profileAsset().website" :href="normalizedWebsiteUrl(profileAsset().website)" target="_blank" rel="noopener noreferrer">
+                        {{ formatWebsiteLabel(profileAsset().website) }}
                         <ExternalLink :size="13" />
                       </a>
                       <span v-else>-</span>
                     </dd>
                   </div>
-                  <div><dt>国家 / 城市</dt><dd>{{ displayValue(state.selectedCustomer.country) }} / {{ displayValue(state.selectedCustomer.city) }}</dd></div>
+                  <div><dt>业务范围</dt><dd>{{ displayValue(state.customerProfile?.businessScope || profileAsset().businessScope) }}</dd></div>
+                  <div><dt>国家 / 城市</dt><dd>{{ displayValue(profileAsset().country) }} / {{ displayValue(profileAsset().city) }}</dd></div>
                   <div>
                     <dt>街道地址</dt>
-                    <dd>{{ [state.selectedCustomer.street, state.selectedCustomer.houseNumber, state.selectedCustomer.postcode].filter(Boolean).join(' ') || '-' }}</dd>
+                    <dd>{{ [profileAsset().street, profileAsset().houseNumber, profileAsset().postcode].filter(Boolean).join(' ') || '-' }}</dd>
                   </div>
-                  <div><dt>客户类型</dt><dd>{{ displayValue(state.selectedCustomer.assetType) }}</dd></div>
-                  <div><dt>来源</dt><dd>{{ displayValue(state.selectedCustomer.sourcePrimary) }}</dd></div>
-                  <div><dt>来源对象 ID</dt><dd>{{ displayValue(state.selectedCustomer.sourceObjectId) }}</dd></div>
-                  <div><dt>坐标</dt><dd>{{ displayValue(state.selectedCustomer.longitude) }}, {{ displayValue(state.selectedCustomer.latitude) }}</dd></div>
-                  <div><dt>创建时间</dt><dd>{{ displayValue(state.selectedCustomer.createdAt) }}</dd></div>
+                  <div><dt>客户类型</dt><dd>{{ displayValue(profileAsset().assetType) }}</dd></div>
+                  <div><dt>来源</dt><dd>{{ displayValue(profileAsset().sourcePrimary) }}</dd></div>
+                  <div><dt>来源对象 ID</dt><dd>{{ displayValue(profileAsset().sourceObjectId) }}</dd></div>
+                  <div><dt>坐标</dt><dd>{{ displayValue(profileAsset().longitude) }}, {{ displayValue(profileAsset().latitude) }}</dd></div>
+                  <div><dt>创建时间</dt><dd>{{ displayValue(profileAsset().createdAt) }}</dd></div>
+                </dl>
+                <dl class="detail-list detail-section">
+                  <div><dt>旅行方向</dt><dd>{{ displayValue(state.customerProfile?.travelProfile?.travelDirection) }}</dd></div>
+                  <div><dt>主国家 Basic</dt><dd>{{ state.customerProfile?.travelProfile?.primaryCountry ? state.customerProfile.travelProfile.primaryCountry.id + ' / ' + localizedName(state.customerProfile.travelProfile.primaryCountry.name) : '-' }}</dd></div>
+                  <div><dt>主区域 Basic</dt><dd>{{ state.customerProfile?.travelProfile?.primaryWorldRegion ? localizedName(state.customerProfile.travelProfile.primaryWorldRegion.name) + ' / ' + state.customerProfile.travelProfile.primaryWorldRegion.fullPath : '-' }}</dd></div>
+                  <div><dt>语言</dt><dd>{{ formatLanguages(state.customerProfile?.languages) }}</dd></div>
+                </dl>
+                <dl class="detail-list detail-section">
+                  <div>
+                    <dt>旅行目的地</dt>
+                    <dd>
+                      <span v-if="!state.customerProfile?.destinations?.length">-</span>
+                      <span v-else v-for="destination in state.customerProfile.destinations" :key="destination.destinationType + destinationLabel(destination)" class="inline-token">
+                        {{ destination.primary ? '主' : '辅' }} · {{ destination.destinationType }} · {{ destinationLabel(destination) }}
+                      </span>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>来源证据</dt>
+                    <dd>
+                      <span v-if="!state.customerProfile?.sources?.length">-</span>
+                      <span v-else v-for="source in state.customerProfile.sources" :key="source.id" class="inline-token">
+                        {{ source.sourceType }} · {{ source.sourceObjectId || source.name || source.sourceUrl }}
+                      </span>
+                    </dd>
+                  </div>
                 </dl>
               </template>
 
@@ -2343,6 +2457,7 @@ const App = {
                   <label>官网 <input v-model="state.customerEditForm.website" /></label>
                   <label>国家 <input v-model="state.customerEditForm.country" placeholder="DE" /></label>
                   <label>城市 <input v-model="state.customerEditForm.city" /></label>
+                  <label>业务范围 <textarea v-model="state.customerEditForm.businessScope" rows="3"></textarea></label>
                   <label>邮编 <input v-model="state.customerEditForm.postcode" /></label>
                   <label>街道 <input v-model="state.customerEditForm.street" /></label>
                   <label>门牌号 <input v-model="state.customerEditForm.houseNumber" /></label>
