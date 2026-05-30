@@ -1,8 +1,10 @@
-import { createApp, computed, reactive } from 'vue'
+import { createApp, computed, nextTick, reactive } from 'vue'
 import {
   BarChart3,
   Building2,
+  ChevronDown,
   CheckCircle2,
+  Code2,
   Database,
   Eye,
   ExternalLink,
@@ -14,20 +16,40 @@ import {
   LogOut,
   Mail,
   MapPin,
+  PanelLeftClose,
+  PanelLeftOpen,
   Pencil,
   PlugZap,
+  Plus,
   RefreshCw,
   Search,
   Send,
   Settings,
   ShieldCheck,
+  Trash2,
   Users,
   X
 } from 'lucide-vue-next'
 import './styles.css'
+import pioneerChinaEmailTemplate from './templates/pioneer-china-email.html?raw'
+import {
+  cloneTemplateVariables,
+  parseTemplateVariables,
+  scanTemplateVariableKeys,
+  syncTemplateVariables,
+  templateVariablesToJson
+} from './template-variables.js'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
+const REQUIRED_TRACKING_LINK_PARAM = 'trackingLink'
+const REQUIRED_TRACKING_LINK_MESSAGE = 'HTML 模板必须包含短链参数 ${trackingLink}'
+const DEFAULT_TEMPLATE_VARIABLES = [
+  { key: 'customerName', label: '客户名称', sampleValue: 'Reisen Scala', required: true },
+  { key: 'companyName', label: '公司名称', sampleValue: 'Youjie Tech', required: false },
+  { key: REQUIRED_TRACKING_LINK_PARAM, label: '短链', sampleValue: 'https://s.example.com/china-trip-demo', required: true }
+]
+const EMPTY_TEMPLATE_PREVIEW_HTML = '<!doctype html><html><body style="font-family:Arial,sans-serif;color:#667;margin:24px;">点击“渲染预览”查看模板效果</body></html>'
 
 const demoCustomers = [
   {
@@ -85,6 +107,7 @@ const state = reactive({
     password: 'secret123'
   },
   activeNav: 'dashboard',
+  sidebarCollapsed: localStorage.getItem('lead_admin_sidebar_collapsed') === 'true',
   loading: false,
   error: '',
   notice: '',
@@ -142,16 +165,52 @@ const state = reactive({
     hasNext: false,
     hasPrevious: false
   },
+  trackingSummary: {
+    totalClicks: 0,
+    clickedCustomers: 0,
+    shortLinks: 0,
+    clickRate: 0
+  },
+  trackingTimeseries: [],
+  trackingUtmStats: [],
+  trackingLinkStats: [],
+  trackingEvents: [],
+  trackingEventPage: {
+    page: 0,
+    size: 20,
+    totalItems: 0,
+    totalPages: 0,
+    hasNext: false,
+    hasPrevious: false
+  },
+  trackingFilter: {
+    campaignId: ''
+  },
   selectedCampaign: null,
   campaignForm: {
-    name: '旅行社合作邮件测试',
-    objective: '小批量验证海外旅行社邮件触达',
-    subject: 'Partnership inquiry from Youjie Tech',
-    fromName: 'Youjie Tech',
-    body: 'Hello {{customerName}},\\n\\nWe are exploring cooperation opportunities with travel agencies.',
+    name: '先锋中国行程推广邮件',
+    objective: '向海外旅行社推广 9 天 8 晚中国文化线路',
+    subject: 'China Discovery from US$399+ for ${customerName}',
+    fromName: 'Youjie Travel Partnerships',
+    htmlBody: pioneerChinaEmailTemplate,
+    templateVariables: cloneTemplateVariables(DEFAULT_TEMPLATE_VARIABLES),
+    trackingTargetUrl: 'https://www.example.com/travel-agency-partnership',
+    trackingShortCode: 'china-trip',
+    trackingUtmSource: 'email',
+    trackingUtmMedium: 'email',
+    trackingUtmCampaign: '1780118309231001',
+    trackingUtmContent: 'template_a',
+    trackingUtmTerm: '',
     channelId: '',
     segmentIds: []
   },
+  trackingLinkDialogOpen: false,
+  segmentDropdownOpen: false,
+  segmentDropdownQuery: '',
+  templatePreviewHtml: '',
+  templatePreviewSubject: '',
+  templatePreviewError: '',
+  templatePreviewLoading: false,
   mappingPreview: null,
   mappingResult: null,
   customerTool: 'list',
@@ -216,11 +275,26 @@ const navItems = [
     description: '维护基于规则引擎动态筛选的客户群，并刷新客户关联关系'
   },
   {
+    key: 'campaign-list',
+    label: '活动列表',
+    icon: Layers,
+    title: '邮件活动列表',
+    description: '查看全部邮件活动，并进入指定活动的详情编辑页面'
+  },
+  {
     key: 'campaigns',
     label: '邮件活动',
     icon: Send,
-    title: '邮件活动',
+    parentKey: 'campaign-list',
+    title: '邮件活动详情',
     description: '创建活动、编辑模板、选择通道和客群，生成预推送并模拟发送'
+  },
+  {
+    key: 'tracking',
+    label: '短链统计',
+    icon: BarChart3,
+    title: '短链统计',
+    description: '查看营销短链点击、UTM 维度和点击明细'
   },
   {
     key: 'settings',
@@ -232,8 +306,8 @@ const navItems = [
 ]
 
 const ROLE_PAGE_ACCESS = {
-  TENANT_OWNER: ['dashboard', 'customers', 'channels', 'segments', 'campaigns', 'imports', 'mapping', 'settings'],
-  TENANT_ADMIN: ['dashboard', 'customers', 'channels', 'segments', 'campaigns', 'imports', 'mapping', 'settings'],
+  TENANT_OWNER: ['dashboard', 'customers', 'channels', 'segments', 'campaign-list', 'campaigns', 'tracking', 'imports', 'mapping', 'settings'],
+  TENANT_ADMIN: ['dashboard', 'customers', 'channels', 'segments', 'campaign-list', 'campaigns', 'tracking', 'imports', 'mapping', 'settings'],
   TENANT_USER: ['dashboard', 'customers', 'settings']
 }
 
@@ -241,6 +315,37 @@ const ROLE_LABELS = {
   TENANT_OWNER: '租户所有者',
   TENANT_ADMIN: '租户管理员',
   TENANT_USER: '租户成员'
+}
+
+const CAMPAIGN_LIFECYCLE_STEPS = [
+  { status: 'DRAFT', label: '配置草稿', hint: '模板、通道、客群' },
+  { status: 'PREVIEW_GENERATED', label: '生成预推送', hint: '锁定收件人' },
+  { status: 'REVIEW_APPROVED', label: '审核通过', hint: '确认内容合规' },
+  { status: 'SIMULATED', label: '模拟发送', hint: '只记录日志' },
+  { status: 'CONFIRMED', label: '最终确认发送', hint: '进入发送态' }
+]
+
+const CAMPAIGN_STATUS_LABELS = {
+  DRAFT: '配置草稿',
+  PREVIEW_GENERATED: '已生成预推送',
+  REVIEW_APPROVED: '审核通过',
+  REVIEW_REJECTED: '审核驳回',
+  SIMULATED: '已模拟发送',
+  CONFIRMED: '最终确认发送'
+}
+
+const CAMPAIGN_NEXT_ACTION_BY_STATUS = {
+  DRAFT: 'prePush',
+  PREVIEW_GENERATED: 'review',
+  REVIEW_APPROVED: 'simulateSend',
+  SIMULATED: 'confirm'
+}
+
+const CAMPAIGN_ACTION_LABELS = {
+  prePush: '生成预推送',
+  review: '审核通过',
+  simulateSend: '模拟发送',
+  confirm: '最终确认发送'
 }
 
 function currentRoles() {
@@ -252,8 +357,49 @@ function canAccessNav(nav) {
 }
 
 const availableNavItems = computed(() => navItems.filter((item) => canAccessNav(item.key)))
+const availablePrimaryNavItems = computed(() => availableNavItems.value.filter((item) => !item.parentKey))
 const primaryRole = computed(() => currentRoles()[0])
 const primaryRoleLabel = computed(() => ROLE_LABELS[primaryRole.value] || primaryRole.value)
+const campaignCurrentStatus = computed(() => state.selectedCampaign?.status || 'DRAFT')
+const campaignCurrentStatusLabel = computed(() => CAMPAIGN_STATUS_LABELS[campaignCurrentStatus.value] || campaignCurrentStatus.value)
+const campaignNextAction = computed(() => CAMPAIGN_NEXT_ACTION_BY_STATUS[campaignCurrentStatus.value] || '')
+const campaignNextActionLabel = computed(() => campaignNextAction.value ? campaignActionLabel(campaignNextAction.value) : '生命周期已完成')
+const templateMissingTrackingLinkParam = computed(() => !campaignHtmlHasTrackingLinkParam())
+const editableTemplateVariableRows = computed(() =>
+  state.campaignForm.templateVariables
+    .map((variable, index) => ({ variable, index }))
+    .filter(({ variable }) => String(variable.key || '').trim() !== REQUIRED_TRACKING_LINK_PARAM)
+)
+const campaignSetupDirty = computed(() => {
+  const campaign = state.selectedCampaign
+  if (!campaign?.id || !campaign.template) return false
+  return (campaign.template.subject || '') !== (state.campaignForm.subject || '')
+    || (campaign.template.fromName || '') !== (state.campaignForm.fromName || '')
+    || (campaign.template.htmlBody || campaign.template.body || '') !== (state.campaignForm.htmlBody || '')
+    || String(campaign.channelId || '') !== String(state.campaignForm.channelId || '')
+    || normalizedIdList(campaign.segmentIds) !== normalizedIdList(state.campaignForm.segmentIds)
+    || normalizedTemplateVariables(parseTemplateVariables(campaign.template.variablesJson, DEFAULT_TEMPLATE_VARIABLES)) !== normalizedTemplateVariables(state.campaignForm.templateVariables)
+})
+const campaignTrackingLinkDirty = computed(() => {
+  const campaign = state.selectedCampaign
+  if (!campaign?.id) return false
+  return (campaign.trackingLink?.targetUrl || '') !== (state.campaignForm.trackingTargetUrl || '')
+    || (campaign.trackingLink?.shortCode || '') !== (state.campaignForm.trackingShortCode || '')
+    || (campaign.trackingLink?.utmSource || '') !== (state.campaignForm.trackingUtmSource || '')
+    || (campaign.trackingLink?.utmMedium || '') !== (state.campaignForm.trackingUtmMedium || '')
+    || (campaign.trackingLink?.utmCampaign || '') !== (state.campaignForm.trackingUtmCampaign || '')
+    || (campaign.trackingLink?.utmContent || '') !== (state.campaignForm.trackingUtmContent || '')
+    || (campaign.trackingLink?.utmTerm || '') !== (state.campaignForm.trackingUtmTerm || '')
+})
+const campaignLifecycleView = computed(() => {
+  const currentIndex = campaignLifecycleIndex(campaignCurrentStatus.value)
+  return CAMPAIGN_LIFECYCLE_STEPS.map((step, index) => ({
+    ...step,
+    active: index === currentIndex,
+    done: index < currentIndex,
+    rollback: index === currentIndex - 1
+  }))
+})
 const pageMeta = computed(() => {
   const fallback = availableNavItems.value[0] || navItems[0]
   if (!canAccessNav(state.activeNav)) return fallback
@@ -275,9 +421,93 @@ const stats = computed(() => {
     { label: '有邮箱客户', value: summary.customersWithEmail, icon: Mail, target: 'customers' },
     { label: '待验证邮箱', value: summary.pendingEmailCustomers, icon: CheckCircle2, target: 'customers' },
     { label: '待 Mapping', value: state.mappingPreview?.unmappedCount || 0, icon: GitMerge, target: 'customers', tool: 'mapping' },
-    { label: '已配置通道', value: state.channelPage.totalItems || state.channels.length, icon: PlugZap, target: 'channels' }
+    { label: '已配置通道', value: state.channelPage.totalItems || state.channels.length, icon: PlugZap, target: 'channels' },
+    { label: '短链点击', value: state.trackingSummary.totalClicks || 0, icon: BarChart3, target: 'tracking' }
   ].filter((item) => canAccessNav(item.target) && (!item.tool || canAccessNav(item.tool)))
 })
+
+function campaignLifecycleIndex(status) {
+  if (status === 'REVIEW_REJECTED') return 2
+  const index = CAMPAIGN_LIFECYCLE_STEPS.findIndex((step) => step.status === status)
+  return index >= 0 ? index : 0
+}
+
+function campaignActionLabel(action) {
+  return CAMPAIGN_ACTION_LABELS[action] || action
+}
+
+function campaignPrePushBlockReason() {
+  if (!state.selectedCampaign?.id) return '请先创建或选择活动'
+  if (!state.selectedCampaign.template) return '请先保存活动配置以写入邮件模板'
+  if (templateMissingTrackingLinkParam.value) return REQUIRED_TRACKING_LINK_MESSAGE
+  if (campaignSetupDirty.value) return '当前模板、通道或客群有未保存修改，请先保存活动配置'
+  if (!state.selectedCampaign.trackingLink) return '请先保存活动短链接配置'
+  if (campaignTrackingLinkDirty.value) return '当前短链接配置有未保存修改，请先保存短链接配置'
+  if (!state.selectedCampaign.channelId) {
+    return state.campaignForm.channelId ? '请先保存活动配置以绑定推送通道' : '请先选择并保存推送通道'
+  }
+  if (!state.selectedCampaign.segmentIds?.length) {
+    return state.campaignForm.segmentIds.length ? '请先保存活动配置以绑定客群' : '请先选择并保存客群'
+  }
+  return ''
+}
+
+function isCampaignActionDisabled(action) {
+  if (state.loading || !state.selectedCampaign?.id) return true
+  if (action === 'prePush' && campaignPrePushBlockReason()) return true
+  return campaignNextAction.value !== action
+}
+
+function isCampaignAdvanceDisabled() {
+  if (state.loading || !campaignNextAction.value) return true
+  if (state.selectedCampaign?.id) return false
+  return campaignNextAction.value !== 'prePush' || !state.campaignForm.name.trim()
+}
+
+function isCampaignStepDisabled(step) {
+  return state.loading || !state.selectedCampaign?.id || !step?.rollback
+}
+
+function campaignActionTitle(action) {
+  if (!state.selectedCampaign?.id) return '请先创建或选择活动'
+  if (action === 'prePush') {
+    const reason = campaignPrePushBlockReason()
+    if (reason) return reason
+  }
+  if (campaignNextAction.value === action) return campaignActionLabel(action)
+  if (!campaignNextAction.value) return '当前活动生命周期已完成'
+  return `下一步应执行：${campaignActionLabel(campaignNextAction.value)}`
+}
+
+function campaignAdvanceTitle() {
+  if (!campaignNextAction.value) return '当前活动生命周期已完成'
+  if (!state.selectedCampaign?.id) return '保存当前草稿配置，并进入生成预推送'
+  if (campaignNextAction.value === 'prePush') {
+    const reason = campaignPrePushBlockReason()
+    if (reason) return reason
+  }
+  return `确认完成当前步骤，并进入：${campaignNextActionLabel.value}`
+}
+
+function campaignStepTitle(step) {
+  if (!state.selectedCampaign?.id) return '请先创建或选择活动'
+  if (step?.active) return '当前步骤'
+  if (step?.rollback) return `回退到上一步：${step.label}`
+  return '只能回退到上一步或确认进入下一步'
+}
+
+function normalizedIdList(ids) {
+  return [...(ids || [])].map(String).sort().join('|')
+}
+
+function normalizedTemplateVariables(variables) {
+  return JSON.stringify((variables || []).map((variable) => ({
+    key: String(variable.key || '').trim(),
+    label: String(variable.label || '').trim(),
+    sampleValue: String(variable.sampleValue || ''),
+    required: Boolean(variable.required)
+  })))
+}
 
 function setActiveNav(nav) {
   if (!canAccessNav(nav)) {
@@ -293,6 +523,26 @@ function setActiveNav(nav) {
   if (nav === 'customers' && state.customerTool === 'mapping') {
     loadMappingPreview()
   }
+  if (nav === 'tracking') {
+    loadTrackingAnalytics()
+  }
+  if (nav === 'campaign-list') {
+    loadCampaigns()
+  }
+}
+
+function navChildItems(parentKey) {
+  return availableNavItems.value.filter((item) => item.parentKey === parentKey)
+}
+
+function isNavItemActive(item) {
+  if (state.activeNav === item.key) return true
+  return navChildItems(item.key).some((child) => child.key === state.activeNav)
+}
+
+function toggleSidebar() {
+  state.sidebarCollapsed = !state.sidebarCollapsed
+  localStorage.setItem('lead_admin_sidebar_collapsed', String(state.sidebarCollapsed))
 }
 
 function openStatTarget(item) {
@@ -319,6 +569,20 @@ function formatWebsiteLabel(website) {
 function displayValue(value) {
   if (value === null || value === undefined || value === '') return '-'
   return value
+}
+
+function percentValue(value) {
+  return `${Math.round(Number(value || 0) * 100)}%`
+}
+
+async function copyShortLink(url) {
+  if (!url) return
+  try {
+    await navigator.clipboard?.writeText(url)
+    state.notice = '短链已复制'
+  } catch {
+    state.notice = url
+  }
 }
 
 function openCustomerDetail(customer) {
@@ -655,9 +919,189 @@ function fillCampaignForm(campaign) {
   state.campaignForm.objective = campaign.objective || ''
   state.campaignForm.subject = campaign.template?.subject || state.campaignForm.subject
   state.campaignForm.fromName = campaign.template?.fromName || state.campaignForm.fromName
-  state.campaignForm.body = campaign.template?.body || state.campaignForm.body
+  state.campaignForm.htmlBody = campaign.template?.htmlBody || campaign.template?.body || state.campaignForm.htmlBody
+  state.campaignForm.templateVariables = parseTemplateVariables(campaign.template?.variablesJson, DEFAULT_TEMPLATE_VARIABLES)
+  syncCampaignTemplateVariables()
+  state.campaignForm.trackingTargetUrl = campaign.trackingLink?.targetUrl || state.campaignForm.trackingTargetUrl
+  state.campaignForm.trackingShortCode = campaign.trackingLink?.shortCode || state.campaignForm.trackingShortCode
+  state.campaignForm.trackingUtmSource = campaign.trackingLink?.utmSource || 'email'
+  state.campaignForm.trackingUtmMedium = campaign.trackingLink?.utmMedium || 'email'
+  state.campaignForm.trackingUtmCampaign = campaign.trackingLink?.utmCampaign || campaign.id || state.campaignForm.trackingUtmCampaign
+  state.campaignForm.trackingUtmContent = campaign.trackingLink?.utmContent || state.campaignForm.trackingUtmContent
+  state.campaignForm.trackingUtmTerm = campaign.trackingLink?.utmTerm || ''
   state.campaignForm.channelId = campaign.channelId || ''
   state.campaignForm.segmentIds = [...(campaign.segmentIds || [])]
+  state.segmentDropdownOpen = false
+  state.segmentDropdownQuery = ''
+  state.trackingLinkDialogOpen = false
+  state.templatePreviewHtml = ''
+  state.templatePreviewSubject = ''
+  state.templatePreviewError = ''
+}
+
+function openCampaignDetail(campaign) {
+  fillCampaignForm(campaign)
+  state.activeNav = 'campaigns'
+  state.error = ''
+}
+
+function openCampaignList() {
+  state.activeNav = 'campaign-list'
+  state.error = ''
+  loadCampaigns()
+}
+
+function startNewCampaign() {
+  state.selectedCampaign = null
+  state.campaignForm = {
+    name: '先锋中国行程推广邮件',
+    objective: '向海外旅行社推广 9 天 8 晚中国文化线路',
+    subject: 'China Discovery from US$399+ for ${customerName}',
+    fromName: 'Youjie Travel Partnerships',
+    htmlBody: pioneerChinaEmailTemplate,
+    templateVariables: cloneTemplateVariables(DEFAULT_TEMPLATE_VARIABLES),
+    trackingTargetUrl: 'https://www.example.com/travel-agency-partnership',
+    trackingShortCode: 'china-trip',
+    trackingUtmSource: 'email',
+    trackingUtmMedium: 'email',
+    trackingUtmCampaign: '1780118309231001',
+    trackingUtmContent: 'template_a',
+    trackingUtmTerm: '',
+    channelId: '',
+    segmentIds: []
+  }
+  state.segmentDropdownOpen = false
+  state.segmentDropdownQuery = ''
+  state.trackingLinkDialogOpen = false
+  state.templatePreviewHtml = ''
+  state.templatePreviewSubject = ''
+  state.templatePreviewError = ''
+  state.activeNav = 'campaigns'
+  state.error = ''
+}
+
+function syncCampaignTemplateVariables() {
+  state.campaignForm.templateVariables = syncTemplateVariables({
+    subject: state.campaignForm.subject,
+    htmlBody: state.campaignForm.htmlBody,
+    variables: state.campaignForm.templateVariables
+  })
+}
+
+function templateVariablesJson() {
+  syncCampaignTemplateVariables()
+  return templateVariablesToJson(state.campaignForm.templateVariables)
+}
+
+function addTemplateVariable() {
+  state.campaignForm.templateVariables.push({
+    key: '',
+    label: '',
+    sampleValue: '',
+    required: false
+  })
+}
+
+function removeTemplateVariable(index) {
+  state.campaignForm.templateVariables.splice(index, 1)
+}
+
+async function insertTemplateVariable(variable) {
+  const key = String(variable?.key || '').trim()
+  if (!key) return
+  const placeholder = '${' + key + '}'
+  const editor = document.getElementById('campaign-html-editor')
+  if (!editor) {
+    state.campaignForm.htmlBody += placeholder
+    syncCampaignTemplateVariables()
+    return
+  }
+  const start = editor.selectionStart ?? state.campaignForm.htmlBody.length
+  const end = editor.selectionEnd ?? state.campaignForm.htmlBody.length
+  state.campaignForm.htmlBody = `${state.campaignForm.htmlBody.slice(0, start)}${placeholder}${state.campaignForm.htmlBody.slice(end)}`
+  syncCampaignTemplateVariables()
+  await nextTick()
+  editor.focus()
+  editor.setSelectionRange(start + placeholder.length, start + placeholder.length)
+}
+
+function campaignTemplatePayload() {
+  syncCampaignTemplateVariables()
+  return {
+    subject: state.campaignForm.subject,
+    fromName: state.campaignForm.fromName,
+    htmlBody: state.campaignForm.htmlBody,
+    variablesJson: templateVariablesJson()
+  }
+}
+
+function campaignHtmlHasTrackingLinkParam() {
+  return scanTemplateVariableKeys(state.campaignForm.htmlBody).includes(REQUIRED_TRACKING_LINK_PARAM)
+}
+
+function validateCampaignTemplateTrackingLink() {
+  if (campaignHtmlHasTrackingLinkParam()) return true
+  state.templatePreviewHtml = ''
+  state.templatePreviewSubject = ''
+  state.templatePreviewError = REQUIRED_TRACKING_LINK_MESSAGE
+  state.error = REQUIRED_TRACKING_LINK_MESSAGE
+  return false
+}
+
+function campaignTrackingLinkPayload() {
+  return {
+    targetUrl: state.campaignForm.trackingTargetUrl,
+    shortCode: state.campaignForm.trackingShortCode,
+    utmSource: state.campaignForm.trackingUtmSource,
+    utmMedium: state.campaignForm.trackingUtmMedium,
+    utmCampaign: state.campaignForm.trackingUtmCampaign,
+    utmContent: state.campaignForm.trackingUtmContent,
+    utmTerm: state.campaignForm.trackingUtmTerm
+  }
+}
+
+function openTrackingLinkDialog() {
+  if (!state.selectedCampaign?.id) {
+    state.error = '请先创建或选择活动'
+    return
+  }
+  state.trackingLinkDialogOpen = true
+}
+
+function closeTrackingLinkDialog() {
+  state.trackingLinkDialogOpen = false
+}
+
+function filteredCampaignSegments() {
+  const keyword = state.segmentDropdownQuery.trim().toLowerCase()
+  if (!keyword) return state.segments
+  return state.segments.filter((segment) =>
+    [segment.name, segment.id, segment.description]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(keyword))
+  )
+}
+
+function selectedCampaignSegments() {
+  return state.campaignForm.segmentIds
+    .map((id) => state.segments.find((segment) => segment.id === id))
+    .filter(Boolean)
+}
+
+function isCampaignSegmentSelected(segmentId) {
+  return state.campaignForm.segmentIds.includes(segmentId)
+}
+
+function toggleCampaignSegment(segmentId) {
+  if (isCampaignSegmentSelected(segmentId)) {
+    state.campaignForm.segmentIds = state.campaignForm.segmentIds.filter((id) => id !== segmentId)
+    return
+  }
+  state.campaignForm.segmentIds = [...state.campaignForm.segmentIds, segmentId]
+}
+
+function removeCampaignSegment(segmentId) {
+  state.campaignForm.segmentIds = state.campaignForm.segmentIds.filter((id) => id !== segmentId)
 }
 
 async function request(path, options = {}) {
@@ -752,10 +1196,19 @@ async function refreshAll() {
   } else {
     state.segments = []
   }
-  if (canAccessNav('campaigns')) {
+  if (canAccessNav('campaign-list') || canAccessNav('campaigns')) {
     loaders.push(loadCampaigns())
   } else {
     state.campaigns = []
+  }
+  if (canAccessNav('tracking')) {
+    loaders.push(loadTrackingAnalytics())
+  } else {
+    state.trackingSummary = { totalClicks: 0, clickedCustomers: 0, shortLinks: 0, clickRate: 0 }
+    state.trackingTimeseries = []
+    state.trackingUtmStats = []
+    state.trackingLinkStats = []
+    state.trackingEvents = []
   }
   if (canAccessNav('mapping')) {
     loaders.push(loadMappingPreview())
@@ -915,6 +1368,46 @@ async function loadCampaigns(page = state.campaignPage.page) {
   }
 }
 
+async function loadTrackingAnalytics(page = state.trackingEventPage.page) {
+  if (state.token === 'demo-token') {
+    state.trackingSummary = { totalClicks: 0, clickedCustomers: 0, shortLinks: 0, clickRate: 0 }
+    state.trackingTimeseries = []
+    state.trackingUtmStats = []
+    state.trackingLinkStats = []
+    state.trackingEvents = []
+    state.trackingEventPage = emptyPageResult(0, state.trackingEventPage.size)
+    return
+  }
+  try {
+    const params = new URLSearchParams()
+    if (state.trackingFilter.campaignId) params.set('campaignId', state.trackingFilter.campaignId)
+    const querySuffix = params.toString() ? `?${params}` : ''
+    state.trackingSummary = await request(`/api/tracking/analytics/summary${querySuffix}`)
+    state.trackingTimeseries = await request(`/api/tracking/analytics/timeseries${querySuffix}`)
+    state.trackingUtmStats = await request(`/api/tracking/analytics/by-utm${querySuffix}`)
+    state.trackingLinkStats = await request(`/api/tracking/analytics/by-link${querySuffix}`)
+    const eventParams = new URLSearchParams(params)
+    eventParams.set('page', String(Math.max(0, page)))
+    eventParams.set('size', String(state.trackingEventPage.size))
+    const eventResult = await request(`/api/tracking/analytics/events?${eventParams}`)
+    const pageResult = normalizePageResult(eventResult, [], page, state.trackingEventPage.size)
+    state.trackingEvents = pageResult.items
+    state.trackingEventPage = pageResult
+  } catch (error) {
+    state.trackingEvents = []
+    state.trackingTimeseries = []
+    state.trackingUtmStats = []
+    state.trackingLinkStats = []
+    state.trackingEventPage = emptyPageResult(0, state.trackingEventPage.size)
+    state.error = `短链统计加载失败：${error.message}`
+  }
+}
+
+function changeTrackingEventPage(nextPage) {
+  if (nextPage < 0 || (state.trackingEventPage.totalPages && nextPage >= state.trackingEventPage.totalPages)) return
+  loadTrackingAnalytics(nextPage)
+}
+
 async function createCampaign() {
   state.loading = true
   state.error = ''
@@ -936,6 +1429,7 @@ async function createCampaign() {
 }
 
 async function saveCampaignSetup() {
+  if (!validateCampaignTemplateTrackingLink()) return
   if (!state.selectedCampaign?.id) {
     await createCampaign()
   }
@@ -947,7 +1441,7 @@ async function saveCampaignSetup() {
   try {
     let campaign = await request(`/api/campaigns/${campaignId}/template`, {
       method: 'PUT',
-      body: JSON.stringify({ subject: state.campaignForm.subject, fromName: state.campaignForm.fromName, body: state.campaignForm.body })
+      body: JSON.stringify(campaignTemplatePayload())
     })
     if (state.campaignForm.channelId) {
       campaign = await request(`/api/campaigns/${campaignId}/channel`, {
@@ -971,10 +1465,113 @@ async function saveCampaignSetup() {
   }
 }
 
+async function saveCampaignDraftForAdvance() {
+  if (!validateCampaignTemplateTrackingLink()) return null
+  if (!state.campaignForm.channelId) {
+    state.error = '请先选择推送通道'
+    return null
+  }
+  if (!state.campaignForm.segmentIds.length) {
+    state.error = '请先选择客群'
+    return null
+  }
+
+  let campaign = state.selectedCampaign
+  if (!campaign?.id) {
+    campaign = await request('/api/campaigns', {
+      method: 'POST',
+      body: JSON.stringify({ name: state.campaignForm.name, objective: state.campaignForm.objective })
+    })
+    state.selectedCampaign = campaign
+  }
+
+  const campaignId = campaign.id
+  campaign = await request(`/api/campaigns/${campaignId}/template`, {
+    method: 'PUT',
+    body: JSON.stringify(campaignTemplatePayload())
+  })
+  campaign = await request(`/api/campaigns/${campaignId}/tracking-link`, {
+    method: 'PUT',
+    body: JSON.stringify(campaignTrackingLinkPayload())
+  })
+  campaign = await request(`/api/campaigns/${campaignId}/channel`, {
+    method: 'PUT',
+    body: JSON.stringify({ channelId: state.campaignForm.channelId })
+  })
+  campaign = await request(`/api/campaigns/${campaignId}/segments`, {
+    method: 'PUT',
+    body: JSON.stringify({ segmentIds: state.campaignForm.segmentIds })
+  })
+  fillCampaignForm(campaign)
+  await loadCampaigns()
+  return campaign
+}
+
+async function saveCampaignTrackingLink() {
+  if (!state.selectedCampaign?.id) {
+    state.error = '请先创建或选择活动'
+    return
+  }
+  const campaignId = state.selectedCampaign.id
+  state.loading = true
+  state.error = ''
+  state.notice = ''
+  try {
+    const campaign = await request(`/api/campaigns/${campaignId}/tracking-link`, {
+      method: 'PUT',
+      body: JSON.stringify(campaignTrackingLinkPayload())
+    })
+    fillCampaignForm(campaign)
+    await loadCampaigns()
+    state.trackingLinkDialogOpen = false
+    state.notice = '短链接配置已保存'
+  } catch (error) {
+    state.error = `短链接配置保存失败：${error.message}`
+  } finally {
+    state.loading = false
+  }
+}
+
+async function previewCampaignTemplate() {
+  if (!validateCampaignTemplateTrackingLink()) return
+  if (!state.selectedCampaign?.id) {
+    state.templatePreviewError = '请先选择或创建活动'
+    return
+  }
+  const campaignId = state.selectedCampaign.id
+  state.templatePreviewLoading = true
+  state.templatePreviewError = ''
+  try {
+    const result = await request(`/api/campaigns/${campaignId}/template/preview`, {
+      method: 'POST',
+      body: JSON.stringify(campaignTemplatePayload())
+    })
+    state.templatePreviewSubject = result.subjectPreview || ''
+    state.templatePreviewHtml = result.htmlPreview || ''
+  } catch (error) {
+    state.templatePreviewHtml = ''
+    state.templatePreviewSubject = ''
+    state.templatePreviewError = error.message || '模板预览失败'
+  } finally {
+    state.templatePreviewLoading = false
+  }
+}
+
 async function runCampaignAction(action) {
   if (!state.selectedCampaign?.id) {
     state.error = '请先选择或创建活动'
     return
+  }
+  if (campaignNextAction.value !== action) {
+    state.error = campaignActionTitle(action)
+    return
+  }
+  if (action === 'prePush') {
+    const reason = campaignPrePushBlockReason()
+    if (reason) {
+      state.error = reason
+      return
+    }
   }
   state.loading = true
   state.error = ''
@@ -996,6 +1593,72 @@ async function runCampaignAction(action) {
     state.notice = '活动状态已更新'
   } catch (error) {
     state.error = `活动操作失败：${error.message}`
+  } finally {
+    state.loading = false
+  }
+}
+
+async function advanceCampaignStep() {
+  if (!campaignNextAction.value) {
+    state.error = '当前活动生命周期已完成'
+    return
+  }
+  if (!state.selectedCampaign?.id && campaignNextAction.value !== 'prePush') {
+    state.error = '请先选择或创建活动'
+    return
+  }
+  state.loading = true
+  state.error = ''
+  state.notice = ''
+  try {
+    if (campaignNextAction.value === 'prePush') {
+      const campaign = await saveCampaignDraftForAdvance()
+      if (!campaign) return
+      const reason = campaignPrePushBlockReason()
+      if (reason) {
+        state.error = reason
+        return
+      }
+    }
+    const campaign = await request(`/api/campaigns/${state.selectedCampaign.id}/advance`, {
+      method: 'POST',
+      body: JSON.stringify({ expectedStatus: campaignCurrentStatus.value })
+    })
+    fillCampaignForm(campaign)
+    await loadCampaigns()
+    state.notice = `已确认并进入下一步：${campaignCurrentStatusLabel.value}`
+  } catch (error) {
+    state.error = `活动状态推进失败：${error.message}`
+  } finally {
+    state.loading = false
+  }
+}
+
+async function rollbackCampaignStep(step) {
+  if (!state.selectedCampaign?.id) {
+    state.error = '请先选择或创建活动'
+    return
+  }
+  if (!step?.rollback) {
+    state.error = campaignStepTitle(step)
+    return
+  }
+  state.loading = true
+  state.error = ''
+  state.notice = ''
+  try {
+    const campaign = await request(`/api/campaigns/${state.selectedCampaign.id}/rollback`, {
+      method: 'POST',
+      body: JSON.stringify({
+        expectedStatus: campaignCurrentStatus.value,
+        targetStatus: step.status
+      })
+    })
+    fillCampaignForm(campaign)
+    await loadCampaigns()
+    state.notice = `已回退到上一步：${campaignCurrentStatusLabel.value}`
+  } catch (error) {
+    state.error = `活动状态回退失败：${error.message}`
   } finally {
     state.loading = false
   }
@@ -1098,6 +1761,9 @@ const App = {
   components: {
     BarChart3,
     Building2,
+    ChevronDown,
+    CheckCircle2,
+    Code2,
     Database,
     Eye,
     ExternalLink,
@@ -1106,16 +1772,20 @@ const App = {
     Globe2,
     KeyRound,
     Layers,
-    LogOut,
-    Mail,
-    MapPin,
-    Pencil,
+      LogOut,
+      Mail,
+      MapPin,
+      PanelLeftClose,
+      PanelLeftOpen,
+      Pencil,
     PlugZap,
+    Plus,
     RefreshCw,
     Search,
     Send,
     Settings,
     ShieldCheck,
+    Trash2,
     Users,
     X
   },
@@ -1123,14 +1793,34 @@ const App = {
     return {
       state,
       pageSizeOptions: PAGE_SIZE_OPTIONS,
+      emptyTemplatePreviewHtml: EMPTY_TEMPLATE_PREVIEW_HTML,
+      requiredTrackingLinkMessage: REQUIRED_TRACKING_LINK_MESSAGE,
       stats,
       isLoggedIn,
       filteredCustomers,
       pageMeta,
       availableNavItems,
+      availablePrimaryNavItems,
+      navChildItems,
+      isNavItemActive,
+      toggleSidebar,
       primaryRole,
       primaryRoleLabel,
+      campaignCurrentStatusLabel,
+      campaignNextAction,
+      campaignNextActionLabel,
+      templateMissingTrackingLinkParam,
+      editableTemplateVariableRows,
+      campaignLifecycleView,
+      campaignActionLabel,
+      isCampaignActionDisabled,
+      isCampaignStepDisabled,
+      isCampaignAdvanceDisabled,
+      campaignActionTitle,
+      campaignStepTitle,
+      campaignAdvanceTitle,
       canAccessNav,
+      percentValue,
       login,
       logout,
       setActiveNav,
@@ -1142,12 +1832,35 @@ const App = {
       changeSegmentPage,
       changeSegmentPageSize,
       loadSegmentMembers,
+      loadCampaigns,
       createCampaign,
       saveCampaignSetup,
+      saveCampaignTrackingLink,
+      previewCampaignTemplate,
       fillCampaignForm,
+      openCampaignDetail,
+      openCampaignList,
+      startNewCampaign,
+      addTemplateVariable,
+      removeTemplateVariable,
+      insertTemplateVariable,
+      syncCampaignTemplateVariables,
+      campaignTrackingLinkPayload,
+      openTrackingLinkDialog,
+      closeTrackingLinkDialog,
+      filteredCampaignSegments,
+      selectedCampaignSegments,
+      isCampaignSegmentSelected,
+      toggleCampaignSegment,
+      removeCampaignSegment,
       changeCampaignPage,
       changeCampaignPageSize,
       runCampaignAction,
+      advanceCampaignStep,
+      rollbackCampaignStep,
+      loadTrackingAnalytics,
+      changeTrackingEventPage,
+      copyShortLink,
       importOsm,
       loadMappingPreview,
       runOsmMapping,
@@ -1216,24 +1929,49 @@ const App = {
       </section>
     </main>
 
-    <main v-else class="app-shell">
+    <main v-else class="app-shell" :class="{'sidebar-collapsed': state.sidebarCollapsed}">
       <aside class="sidebar">
-        <div class="brand-lockup compact">
-          <div class="brand-mark"><Mail :size="20" /></div>
-          <div>
-            <h1>有解获客</h1>
-            <p>yj-lead-admin</p>
+        <div class="sidebar-header">
+          <div class="brand-lockup compact">
+            <div class="brand-mark"><Mail :size="20" /></div>
+            <div>
+              <h1>有解获客</h1>
+              <p>yj-lead-admin</p>
+            </div>
           </div>
+          <button
+            class="sidebar-toggle"
+            type="button"
+            :aria-label="state.sidebarCollapsed ? '展开菜单栏' : '收起菜单栏'"
+            :title="state.sidebarCollapsed ? '展开菜单栏' : '收起菜单栏'"
+            @click="toggleSidebar"
+          >
+            <PanelLeftOpen v-if="state.sidebarCollapsed" :size="18" />
+            <PanelLeftClose v-else :size="18" />
+          </button>
         </div>
         <nav>
-          <button
-            v-for="item in availableNavItems"
-            :key="item.key"
-            :class="{active: state.activeNav === item.key}"
-            @click="setActiveNav(item.key)"
-          >
-            <component :is="item.icon" :size="18" />{{ item.label }}
-          </button>
+          <div v-for="item in availablePrimaryNavItems" :key="item.key" class="nav-group">
+            <button
+              :class="{active: state.activeNav === item.key, 'child-active': isNavItemActive(item) && state.activeNav !== item.key}"
+              :title="state.sidebarCollapsed ? item.label : ''"
+              @click="setActiveNav(item.key)"
+            >
+              <component :is="item.icon" :size="18" />{{ item.label }}
+            </button>
+            <div v-if="navChildItems(item.key).length" class="sub-nav">
+              <button
+                v-for="child in navChildItems(item.key)"
+                :key="child.key"
+                class="sub-nav-button"
+                :class="{active: state.activeNav === child.key}"
+                :title="state.sidebarCollapsed ? child.label : ''"
+                @click="setActiveNav(child.key)"
+              >
+                <component :is="child.icon" :size="16" />{{ child.label }}
+              </button>
+            </div>
+          </div>
         </nav>
       </aside>
 
@@ -1825,40 +2563,66 @@ const App = {
           </aside>
         </section>
 
-        <section v-if="canAccessNav('campaigns') && state.activeNav === 'campaigns'" class="main-grid with-detail">
+        <section v-if="canAccessNav('campaign-list') && state.activeNav === 'campaign-list'" class="campaign-list-page">
           <article class="table-panel">
             <div class="panel-header">
               <div>
-                <h3>邮件活动</h3>
-                <p>真实发送暂未实现；最终动作只会在后端终端打印 WOULD_SEND_EMAIL 日志</p>
+                <h3>邮件活动列表</h3>
+                <p>从列表进入某个活动的详情编辑页面；详情页负责模板、短链、客群和生命周期维护</p>
               </div>
-              <button class="secondary-action compact" type="button" @click="createCampaign">创建活动</button>
+              <div class="panel-actions">
+                <button class="secondary-action compact" type="button" :disabled="state.loading" @click="loadCampaigns(0)">
+                  <RefreshCw :size="16" />
+                  刷新
+                </button>
+                <button class="primary-action compact" type="button" @click="startNewCampaign">
+                  <Plus :size="16" />
+                  新建活动
+                </button>
+              </div>
             </div>
-            <div class="data-table">
+            <div v-if="!state.campaigns.length" class="empty-state">
+              <Layers :size="24" />
+              <strong>暂无邮件活动</strong>
+              <span>点击“新建活动”进入详情编辑页后创建第一条活动</span>
+            </div>
+            <div v-else class="data-table">
               <table>
                 <thead>
                   <tr>
                     <th>活动</th>
-                    <th>ID</th>
                     <th>状态</th>
-                    <th>预推送</th>
+                    <th>推送通道</th>
+                    <th>客群</th>
+                    <th>待审</th>
                     <th>操作</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr v-for="campaign in state.campaigns" :key="campaign.id" :class="{selected: state.selectedCampaign?.id === campaign.id}">
-                    <td><strong>{{ campaign.name }}</strong><span>{{ campaign.objective || '-' }}</span></td>
-                    <td>{{ campaign.id }}</td>
+                    <td>
+                      <strong>{{ campaign.name }}</strong>
+                      <span>{{ campaign.id }} / {{ campaign.objective || '暂无目标说明' }}</span>
+                    </td>
                     <td><span class="status">{{ campaign.status }}</span></td>
-                    <td>{{ campaign.prePushRecords?.filter((item) => item.status === 'PENDING_REVIEW').length || 0 }} / {{ campaign.prePushRecords?.length || 0 }}</td>
-                    <td><button class="row-action" type="button" @click="fillCampaignForm(campaign)">配置</button></td>
+                    <td>{{ campaign.channelId || '未绑定' }}</td>
+                    <td>{{ campaign.segmentIds?.length || 0 }} 个</td>
+                    <td>{{ campaign.prePushRecords?.filter((item) => item.status === 'PENDING_REVIEW').length || 0 }}</td>
+                    <td>
+                      <button class="row-action" type="button" @click="openCampaignDetail(campaign)">
+                        <Pencil :size="14" />
+                        进入详情
+                      </button>
+                    </td>
                   </tr>
                 </tbody>
               </table>
             </div>
             <div class="pagination-bar">
               <div class="pagination-meta">
-                <span>共 {{ state.campaignPage.totalItems }} 条，当前第 {{ state.campaignPage.totalPages ? state.campaignPage.page + 1 : 0 }} / {{ state.campaignPage.totalPages }} 页</span>
+                <span>
+                  共 {{ state.campaignPage.totalItems }} 条，当前第 {{ state.campaignPage.totalPages ? state.campaignPage.page + 1 : 0 }} / {{ state.campaignPage.totalPages }} 页
+                </span>
                 <label class="page-size-control">
                   每页
                   <select v-model.number="state.campaignPage.size" @change="changeCampaignPageSize(state.campaignPage.size)">
@@ -1872,65 +2636,389 @@ const App = {
                 <button type="button" :disabled="!state.campaignPage.hasNext" @click="changeCampaignPage(state.campaignPage.page + 1)">下一页</button>
               </div>
             </div>
-            <div v-if="state.selectedCampaign?.prePushRecords?.length" class="data-table compact-table">
+          </article>
+        </section>
+
+        <section v-if="canAccessNav('campaigns') && state.activeNav === 'campaigns'" class="campaign-workbench">
+          <article class="ops-panel campaign-basics">
+            <div class="panel-title">
+              <Send :size="19" />
+              <h3>活动与投放</h3>
+              <button class="row-action" type="button" @click="openCampaignList">
+                <Layers :size="14" />
+                返回列表
+              </button>
+            </div>
+            <form class="ops-form" @submit.prevent="saveCampaignSetup">
+              <label>活动名称<input v-model="state.campaignForm.name" /></label>
+              <label>目标说明<input v-model="state.campaignForm.objective" /></label>
+              <label>邮件主题<input v-model="state.campaignForm.subject" @input="syncCampaignTemplateVariables" /></label>
+              <label>发件名称<input v-model="state.campaignForm.fromName" /></label>
+              <label>
+                推送通道
+                <select v-model="state.campaignForm.channelId">
+                  <option value="">请选择通道</option>
+                  <option v-for="channel in state.channels" :key="channel.id" :value="channel.id">{{ channel.name }} / {{ channel.channelType }}</option>
+                </select>
+              </label>
+              <div class="field-block">
+                客群
+                <div class="campaign-segment-dropdown">
+                  <button class="dropdown-trigger" type="button" @click="state.segmentDropdownOpen = !state.segmentDropdownOpen">
+                    <span>{{ state.campaignForm.segmentIds.length ? '已选择 ' + state.campaignForm.segmentIds.length + ' 个客群' : '请选择客群' }}</span>
+                    <ChevronDown :size="16" />
+                  </button>
+                  <div v-if="state.campaignForm.segmentIds.length" class="selected-segment-tags">
+                    <button v-for="segment in selectedCampaignSegments()" :key="segment.id" type="button" @click="removeCampaignSegment(segment.id)">
+                      {{ segment.name }}
+                      <X :size="13" />
+                    </button>
+                  </div>
+                  <div v-if="state.segmentDropdownOpen" class="dropdown-panel">
+                    <input v-model="state.segmentDropdownQuery" placeholder="搜索客群名称或 ID" />
+                    <button
+                      v-for="segment in filteredCampaignSegments()"
+                      :key="segment.id"
+                      class="dropdown-option"
+                      :class="{selected: isCampaignSegmentSelected(segment.id)}"
+                      type="button"
+                      @click="toggleCampaignSegment(segment.id)"
+                    >
+                      <span>
+                        <strong>{{ segment.name }}</strong>
+                        <small>{{ segment.id }} / {{ segment.description || '暂无说明' }}</small>
+                      </span>
+                      <CheckCircle2 v-if="isCampaignSegmentSelected(segment.id)" :size="16" />
+                    </button>
+                    <div v-if="filteredCampaignSegments().length === 0" class="dropdown-empty">暂无匹配客群</div>
+                  </div>
+                </div>
+              </div>
+              <div class="stacked-actions">
+                <button class="primary-action" :disabled="state.loading">
+                  <CheckCircle2 :size="17" />
+                  保存活动配置
+                </button>
+                <button class="secondary-action" type="button" :disabled="state.loading" @click="createCampaign">
+                  <Plus :size="17" />
+                  创建活动
+                </button>
+              </div>
+            </form>
+          </article>
+
+          <article class="ops-panel template-editor-panel">
+            <div class="panel-title">
+              <Code2 :size="19" />
+              <h3>HTML 模板编辑与预览</h3>
+            </div>
+            <div class="template-split">
+              <section class="template-split-pane">
+                <div class="split-pane-header">
+                  <span>HTML</span>
+                  <button class="row-action" type="button" :disabled="state.templatePreviewLoading" @click="previewCampaignTemplate">
+                    <Eye :size="15" />
+                    渲染预览
+                  </button>
+                </div>
+                <textarea
+                  id="campaign-html-editor"
+                  v-model="state.campaignForm.htmlBody"
+                  class="html-editor"
+                  spellcheck="false"
+                  @input="syncCampaignTemplateVariables"
+                ></textarea>
+              </section>
+              <section class="template-split-pane">
+                <div class="split-pane-header">
+                  <span>邮件预览</span>
+                  <strong>{{ state.templatePreviewSubject || '未渲染' }}</strong>
+                </div>
+                <div v-if="state.templatePreviewError" class="message error preview-error">{{ state.templatePreviewError }}</div>
+                <iframe
+                  v-else
+                  class="template-preview-frame"
+                  title="邮件 HTML 预览"
+                  sandbox=""
+                  :srcdoc="state.templatePreviewHtml || emptyTemplatePreviewHtml"
+                ></iframe>
+              </section>
+            </div>
+            <div class="campaign-lifecycle-flow" aria-label="邮件营销活动生命周期">
+              <div class="lifecycle-summary">
+                <span>当前状态</span>
+                <strong>{{ campaignCurrentStatusLabel }}</strong>
+              </div>
+              <ol class="lifecycle-steps">
+                <li
+                  v-for="(step, index) in campaignLifecycleView"
+                  :key="step.status"
+                  :class="{active: step.active, done: step.done, rollback: step.rollback}"
+                >
+                  <button type="button" :disabled="isCampaignStepDisabled(step)" :title="campaignStepTitle(step)" @click="rollbackCampaignStep(step)">
+                    <span class="step-index">{{ index + 1 }}</span>
+                    <span class="step-copy">
+                      <strong>{{ step.label }}</strong>
+                      <small>{{ step.hint }}</small>
+                    </span>
+                  </button>
+                </li>
+              </ol>
+            </div>
+            <div class="lifecycle-actions">
+              <button class="primary-action lifecycle-advance" type="button" :disabled="isCampaignAdvanceDisabled()" :title="campaignAdvanceTitle()" @click="advanceCampaignStep">
+                <CheckCircle2 :size="17" />
+                确认并进入下一步：{{ campaignNextActionLabel }}
+              </button>
+            </div>
+            <div v-if="state.selectedCampaign?.prePushRecords?.length" class="data-table compact-table prepush-table">
               <table>
                 <thead>
                   <tr>
                     <th>客户</th>
                     <th>邮箱</th>
-                    <th>客群</th>
+                    <th>短链</th>
                     <th>状态</th>
-                    <th>排除原因</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr v-for="record in state.selectedCampaign.prePushRecords" :key="record.customerId">
-                    <td>{{ record.customerName || record.customerId }}</td>
+                    <td><strong>{{ record.customerName || record.customerId }}</strong><span>{{ record.segmentNames?.join(', ') }}</span></td>
                     <td>{{ record.email || '-' }}</td>
-                    <td>{{ record.segmentNames?.join(', ') }}</td>
+                    <td>
+                      <button v-if="record.trackingShortUrl" class="link-button" type="button" @click="copyShortLink(record.trackingShortUrl)">复制短链</button>
+                      <span>{{ record.trackingShortUrl || '-' }}</span>
+                    </td>
                     <td><span class="status">{{ record.status }}</span></td>
-                    <td>{{ record.exclusionReason || '-' }}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
           </article>
 
-          <aside class="ops-stack">
+          <aside class="ops-panel template-preview-panel">
+            <div class="panel-title">
+              <Code2 :size="19" />
+              <h3>短链与变量配置</h3>
+            </div>
+            <div class="tracking-link-dock">
+              <div>
+                <strong>短链接配置</strong>
+                <span>{{ state.selectedCampaign?.trackingLink ? state.selectedCampaign.trackingLink.shortCode : '未配置' }}</span>
+              </div>
+              <button class="secondary-action compact" type="button" :disabled="!state.selectedCampaign?.id" @click="openTrackingLinkDialog">
+                <ExternalLink :size="16" />
+                {{ state.selectedCampaign?.trackingLink ? '编辑短链接配置' : '配置短链接' }}
+              </button>
+              <div v-if="templateMissingTrackingLinkParam" class="message error template-param-error">{{ requiredTrackingLinkMessage }}</div>
+              <dl class="tracking-link-summary">
+                <div><dt>目标长链接</dt><dd>{{ state.selectedCampaign?.trackingLink?.targetUrl || '未配置' }}</dd></div>
+                <div><dt>短链接码</dt><dd>{{ state.selectedCampaign?.trackingLink?.shortCode || '未配置' }}</dd></div>
+                <div><dt>UTM Campaign</dt><dd>{{ state.selectedCampaign?.trackingLink?.utmCampaign || '未配置' }}</dd></div>
+              </dl>
+            </div>
+            <div class="variable-list">
+              <div class="variable-row variable-head">
+                <span>Key</span>
+                <span>标签</span>
+                <span>示例值</span>
+                <span>必填</span>
+              </div>
+              <div v-for="item in editableTemplateVariableRows" :key="item.index" class="variable-row">
+                <input v-model="item.variable.key" placeholder="customerName" />
+                <input v-model="item.variable.label" placeholder="客户名称" />
+                <input v-model="item.variable.sampleValue" placeholder="Reisen Scala" />
+                <label class="checkbox-label"><input v-model="item.variable.required" type="checkbox" /> 必填</label>
+                <button class="icon-action" type="button" title="插入变量" @click="insertTemplateVariable(item.variable)">
+                  <Code2 :size="15" />
+                </button>
+                <button class="icon-action danger" type="button" title="删除变量" @click="removeTemplateVariable(item.index)">
+                  <Trash2 :size="15" />
+                </button>
+              </div>
+              <button class="secondary-action compact" type="button" @click="addTemplateVariable">
+                <Plus :size="16" />
+                添加变量
+              </button>
+            </div>
+          </aside>
+        </section>
+
+        <div v-if="state.trackingLinkDialogOpen" class="modal-backdrop" @click.self="closeTrackingLinkDialog">
+          <section class="modal-panel tracking-link-modal" role="dialog" aria-modal="true" aria-labelledby="tracking-link-title">
+            <div class="modal-header">
+              <div>
+                <h3 id="tracking-link-title">短链接配置</h3>
+                <p>为当前邮件活动单独维护跳转目标、短链接码和 UTM 参数</p>
+              </div>
+              <button class="icon-action" type="button" title="关闭" @click="closeTrackingLinkDialog">
+                <X :size="16" />
+              </button>
+            </div>
+            <form class="ops-form" @submit.prevent="saveCampaignTrackingLink">
+              <label>目标长链接<input v-model="state.campaignForm.trackingTargetUrl" placeholder="https://www.example.com/travel-agency-partnership" /></label>
+              <label>短链接码<input v-model="state.campaignForm.trackingShortCode" placeholder="china-trip" /></label>
+              <div class="utm-grid">
+                <label>UTM Source<input v-model="state.campaignForm.trackingUtmSource" placeholder="email" /></label>
+                <label>UTM Medium<input v-model="state.campaignForm.trackingUtmMedium" placeholder="email" /></label>
+                <label>UTM Campaign<input v-model="state.campaignForm.trackingUtmCampaign" placeholder="1780118309231001" /></label>
+                <label>UTM Content<input v-model="state.campaignForm.trackingUtmContent" placeholder="template_a" /></label>
+                <label>UTM Term<input v-model="state.campaignForm.trackingUtmTerm" /></label>
+              </div>
+              <div class="modal-actions">
+                <button class="secondary-action" type="button" :disabled="state.loading" @click="closeTrackingLinkDialog">取消</button>
+                <button class="primary-action" :disabled="state.loading">保存短链接配置</button>
+              </div>
+            </form>
+          </section>
+        </div>
+
+        <section v-if="canAccessNav('tracking') && state.activeNav === 'tracking'" class="tracking-page">
+          <div class="toolbar compact-toolbar">
+            <label>
+              活动筛选
+              <select v-model="state.trackingFilter.campaignId" @change="loadTrackingAnalytics(0)">
+                <option value="">全部活动</option>
+                <option v-for="campaign in state.campaigns" :key="campaign.id" :value="campaign.id">{{ campaign.name }} / {{ campaign.id }}</option>
+              </select>
+            </label>
+            <button class="secondary-action" type="button" :disabled="state.loading" @click="loadTrackingAnalytics(0)">
+              <RefreshCw :size="16" /> 刷新
+            </button>
+          </div>
+
+          <section class="stats-grid tracking-stats">
+            <button class="stat-card" type="button">
+              <BarChart3 :size="22" />
+              <span>总点击</span>
+              <strong>{{ state.trackingSummary.totalClicks || 0 }}</strong>
+            </button>
+            <button class="stat-card" type="button">
+              <Users :size="22" />
+              <span>已点击客户</span>
+              <strong>{{ state.trackingSummary.clickedCustomers || 0 }}</strong>
+            </button>
+            <button class="stat-card" type="button">
+              <ExternalLink :size="22" />
+              <span>短链数</span>
+              <strong>{{ state.trackingSummary.shortLinks || 0 }}</strong>
+            </button>
+            <button class="stat-card" type="button">
+              <CheckCircle2 :size="22" />
+              <span>客户点击率</span>
+              <strong>{{ percentValue(state.trackingSummary.clickRate) }}</strong>
+            </button>
+          </section>
+
+          <article class="ops-panel tracking-trend">
+            <div class="panel-title">
+              <BarChart3 :size="19" />
+              <h3>点击趋势</h3>
+            </div>
+            <div class="trend-row" v-if="state.trackingTimeseries.length">
+              <div v-for="point in state.trackingTimeseries" :key="point.bucket" class="trend-point">
+                <span>{{ point.bucket }}</span>
+                <strong>{{ point.clicks }}</strong>
+                <small>{{ point.customers }} 客户</small>
+              </div>
+            </div>
+            <div v-else class="empty-state compact-empty">暂无点击趋势数据</div>
+          </article>
+
+          <section class="main-grid with-detail">
             <article class="ops-panel">
               <div class="panel-title">
-                <Send :size="19" />
-                <h3>活动配置</h3>
+                <Layers :size="19" />
+                <h3>UTM 维度</h3>
               </div>
-              <form class="ops-form" @submit.prevent="saveCampaignSetup">
-                <label>活动名称<input v-model="state.campaignForm.name" /></label>
-                <label>目标说明<input v-model="state.campaignForm.objective" /></label>
-                <label>邮件主题<input v-model="state.campaignForm.subject" /></label>
-                <label>发件名称<input v-model="state.campaignForm.fromName" /></label>
-                <label>邮件正文<textarea v-model="state.campaignForm.body" rows="7"></textarea></label>
-                <label>
-                  推送通道
-                  <select v-model="state.campaignForm.channelId">
-                    <option value="">请选择通道</option>
-                    <option v-for="channel in state.channels" :key="channel.id" :value="channel.id">{{ channel.name }} / {{ channel.channelType }}</option>
-                  </select>
-                </label>
-                <label>
-                  客群
-                  <select v-model="state.campaignForm.segmentIds" multiple>
-                    <option v-for="segment in state.segments" :key="segment.id" :value="segment.id">{{ segment.name }} / {{ segment.id }}</option>
-                  </select>
-                </label>
-                <button class="primary-action" :disabled="state.loading">保存活动配置</button>
-              </form>
-              <div class="action-grid">
-                <button class="secondary-action" type="button" :disabled="state.loading" @click="runCampaignAction('prePush')">生成预推送</button>
-                <button class="secondary-action" type="button" :disabled="state.loading" @click="runCampaignAction('review')">审核通过</button>
-                <button class="secondary-action" type="button" :disabled="state.loading" @click="runCampaignAction('confirm')">最终确认</button>
-                <button class="secondary-action" type="button" :disabled="state.loading" @click="runCampaignAction('simulateSend')">模拟发送</button>
+              <div class="data-table compact-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>维度</th>
+                      <th>点击</th>
+                      <th>客户</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="item in state.trackingUtmStats" :key="item.dimension">
+                      <td>{{ item.dimension || '-' }}</td>
+                      <td>{{ item.clicks }}</td>
+                      <td>{{ item.customers }}</td>
+                    </tr>
+                    <tr v-if="!state.trackingUtmStats.length">
+                      <td colspan="3">暂无 UTM 点击数据</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </article>
-          </aside>
+
+            <article class="ops-panel">
+              <div class="panel-title">
+                <Eye :size="19" />
+                <h3>点击明细</h3>
+              </div>
+              <div class="data-table compact-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>时间</th>
+                      <th>活动</th>
+                      <th>客户</th>
+                      <th>来源</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="event in state.trackingEvents" :key="event.id">
+                      <td>{{ event.clickedAt }}</td>
+                      <td>{{ event.campaignId }}</td>
+                      <td>{{ event.customerId || '-' }}</td>
+                      <td>{{ event.referrer || '-' }}</td>
+                    </tr>
+                    <tr v-if="!state.trackingEvents.length">
+                      <td colspan="4">暂无点击明细</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="pagination">
+                <span>第 {{ state.trackingEventPage.page + 1 }} 页 / 共 {{ state.trackingEventPage.totalPages || 1 }} 页</span>
+                <button type="button" :disabled="!state.trackingEventPage.hasPrevious" @click="changeTrackingEventPage(state.trackingEventPage.page - 1)">上一页</button>
+                <button type="button" :disabled="!state.trackingEventPage.hasNext" @click="changeTrackingEventPage(state.trackingEventPage.page + 1)">下一页</button>
+              </div>
+            </article>
+          </section>
+
+          <article class="ops-panel tracking-rank">
+            <div class="panel-title">
+              <ExternalLink :size="19" />
+              <h3>短链排行</h3>
+            </div>
+            <div class="data-table compact-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>短链</th>
+                    <th>目标链接</th>
+                    <th>点击</th>
+                    <th>客户</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="link in state.trackingLinkStats" :key="link.shortLinkId">
+                    <td>{{ link.shortUrl }}</td>
+                    <td>{{ link.finalUrl }}</td>
+                    <td>{{ link.clicks }}</td>
+                    <td>{{ link.customers }}</td>
+                  </tr>
+                  <tr v-if="!state.trackingLinkStats.length">
+                    <td colspan="4">暂无短链排行数据</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
         </section>
 
         <section v-if="canAccessNav('settings') && state.activeNav === 'settings'" class="utility-page">

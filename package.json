@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 18082 --strictPort",
-    "test": "node tests/source-guards.test.mjs",
+    "test": "node tests/source-guards.test.mjs && node tests/template-variables.test.mjs",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1 --port 18082 --strictPort"
   },
