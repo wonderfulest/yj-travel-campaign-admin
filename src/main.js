@@ -174,6 +174,14 @@ const state = reactive({
   trackingTimeseries: [],
   trackingUtmStats: [],
   trackingLinkStats: [],
+  trackingLinkPage: {
+    page: 0,
+    size: 20,
+    totalItems: 0,
+    totalPages: 0,
+    hasNext: false,
+    hasPrevious: false
+  },
   trackingEvents: [],
   trackingEventPage: {
     page: 0,
@@ -239,6 +247,8 @@ const state = reactive({
   importResult: null,
   filter: '',
   selectedCustomer: null,
+  customerProfile: null,
+  customerProfileLoading: false,
   customerEditMode: false,
   customerEditForm: {},
   customerHelpVisible: true
@@ -425,6 +435,10 @@ const stats = computed(() => {
     { label: '短链点击', value: state.trackingSummary.totalClicks || 0, icon: BarChart3, target: 'tracking' }
   ].filter((item) => canAccessNav(item.target) && (!item.tool || canAccessNav(item.tool)))
 })
+const customerCountryStats = computed(() => {
+  const summary = state.customerSummary || summarizeCustomers(state.customers)
+  return Array.isArray(summary.customersByCountry) ? summary.customersByCountry : []
+})
 
 function campaignLifecycleIndex(status) {
   if (status === 'REVIEW_REJECTED') return 2
@@ -573,6 +587,12 @@ function displayValue(value) {
 
 function percentValue(value) {
   return `${Math.round(Number(value || 0) * 100)}%`
+}
+
+function formatCountryShare(customers) {
+  const total = Number((state.customerSummary || summarizeCustomers(state.customers)).totalCustomers || 0)
+  if (!total) return '0%'
+  return `${Math.round((Number(customers || 0) / total) * 100)}%`
 }
 
 async function copyShortLink(url) {
@@ -732,10 +752,18 @@ function localPageResult(items, page = 0, size = 20) {
 }
 
 function summarizeCustomers(items) {
+  const countryCounts = new Map()
+  for (const item of items) {
+    const country = String(item.country || '').trim() || '未填写'
+    countryCounts.set(country, (countryCounts.get(country) || 0) + 1)
+  }
   return {
     totalCustomers: items.length,
     customersWithEmail: items.filter((item) => item.email).length,
-    pendingEmailCustomers: items.filter((item) => item.emailQuality === 'PENDING').length
+    pendingEmailCustomers: items.filter((item) => item.emailQuality === 'PENDING').length,
+    customersByCountry: [...countryCounts.entries()]
+      .map(([country, customers]) => ({ country, customers }))
+      .sort((left, right) => right.customers - left.customers || left.country.localeCompare(right.country))
   }
 }
 
@@ -1368,12 +1396,13 @@ async function loadCampaigns(page = state.campaignPage.page) {
   }
 }
 
-async function loadTrackingAnalytics(page = state.trackingEventPage.page) {
+async function loadTrackingAnalytics(page = state.trackingEventPage.page, linkPage = state.trackingLinkPage.page) {
   if (state.token === 'demo-token') {
     state.trackingSummary = { totalClicks: 0, clickedCustomers: 0, shortLinks: 0, clickRate: 0 }
     state.trackingTimeseries = []
     state.trackingUtmStats = []
     state.trackingLinkStats = []
+    state.trackingLinkPage = emptyPageResult(0, state.trackingLinkPage.size)
     state.trackingEvents = []
     state.trackingEventPage = emptyPageResult(0, state.trackingEventPage.size)
     return
@@ -1385,7 +1414,13 @@ async function loadTrackingAnalytics(page = state.trackingEventPage.page) {
     state.trackingSummary = await request(`/api/tracking/analytics/summary${querySuffix}`)
     state.trackingTimeseries = await request(`/api/tracking/analytics/timeseries${querySuffix}`)
     state.trackingUtmStats = await request(`/api/tracking/analytics/by-utm${querySuffix}`)
-    state.trackingLinkStats = await request(`/api/tracking/analytics/by-link${querySuffix}`)
+    const linkParams = new URLSearchParams(params)
+    linkParams.set('page', String(Math.max(0, linkPage)))
+    linkParams.set('size', String(state.trackingLinkPage.size))
+    const linkResult = await request(`/api/tracking/analytics/by-link?${linkParams}`)
+    const linkPageResult = normalizePageResult(linkResult, [], linkPage, state.trackingLinkPage.size)
+    state.trackingLinkStats = linkPageResult.items
+    state.trackingLinkPage = linkPageResult
     const eventParams = new URLSearchParams(params)
     eventParams.set('page', String(Math.max(0, page)))
     eventParams.set('size', String(state.trackingEventPage.size))
@@ -1398,6 +1433,7 @@ async function loadTrackingAnalytics(page = state.trackingEventPage.page) {
     state.trackingTimeseries = []
     state.trackingUtmStats = []
     state.trackingLinkStats = []
+    state.trackingLinkPage = emptyPageResult(0, state.trackingLinkPage.size)
     state.trackingEventPage = emptyPageResult(0, state.trackingEventPage.size)
     state.error = `短链统计加载失败：${error.message}`
   }
@@ -1406,6 +1442,11 @@ async function loadTrackingAnalytics(page = state.trackingEventPage.page) {
 function changeTrackingEventPage(nextPage) {
   if (nextPage < 0 || (state.trackingEventPage.totalPages && nextPage >= state.trackingEventPage.totalPages)) return
   loadTrackingAnalytics(nextPage)
+}
+
+function changeTrackingLinkPage(nextPage) {
+  if (nextPage < 0 || (state.trackingLinkPage.totalPages && nextPage >= state.trackingLinkPage.totalPages)) return
+  loadTrackingAnalytics(state.trackingEventPage.page, nextPage)
 }
 
 async function createCampaign() {
@@ -1796,6 +1837,7 @@ const App = {
       emptyTemplatePreviewHtml: EMPTY_TEMPLATE_PREVIEW_HTML,
       requiredTrackingLinkMessage: REQUIRED_TRACKING_LINK_MESSAGE,
       stats,
+      customerCountryStats,
       isLoggedIn,
       filteredCustomers,
       pageMeta,
@@ -1821,6 +1863,7 @@ const App = {
       campaignAdvanceTitle,
       canAccessNav,
       percentValue,
+      formatCountryShare,
       login,
       logout,
       setActiveNav,
@@ -1860,6 +1903,7 @@ const App = {
       rollbackCampaignStep,
       loadTrackingAnalytics,
       changeTrackingEventPage,
+      changeTrackingLinkPage,
       copyShortLink,
       importOsm,
       loadMappingPreview,
@@ -2005,6 +2049,30 @@ const App = {
             <span>{{ item.label }}</span>
             <strong>{{ item.value }}</strong>
           </button>
+        </section>
+
+        <section v-if="state.activeNav === 'dashboard'" class="ops-panel dashboard-country-panel">
+          <div class="panel-title">
+            <Globe2 :size="19" />
+            <h3>客户资产国家分布</h3>
+          </div>
+          <div v-if="customerCountryStats.length" class="country-stat-list">
+            <button
+              v-for="item in customerCountryStats"
+              :key="item.country"
+              class="country-stat-row"
+              type="button"
+              @click="setActiveNav('customers')"
+            >
+              <span class="country-stat-name">{{ item.country || '未填写' }}</span>
+              <span class="country-stat-bar">
+                <i :style="{ width: formatCountryShare(item.customers) }"></i>
+              </span>
+              <strong>{{ item.customers }}</strong>
+              <small>{{ formatCountryShare(item.customers) }}</small>
+            </button>
+          </div>
+          <div v-else class="empty-state compact-empty">暂无客户资产国家数据</div>
         </section>
 
         <section v-if="canAccessNav('customers') && state.activeNav === 'customers'" class="customer-tools">
@@ -2877,12 +2945,12 @@ const App = {
           <div class="toolbar compact-toolbar">
             <label>
               活动筛选
-              <select v-model="state.trackingFilter.campaignId" @change="loadTrackingAnalytics(0)">
+              <select v-model="state.trackingFilter.campaignId" @change="loadTrackingAnalytics(0, 0)">
                 <option value="">全部活动</option>
                 <option v-for="campaign in state.campaigns" :key="campaign.id" :value="campaign.id">{{ campaign.name }} / {{ campaign.id }}</option>
               </select>
             </label>
-            <button class="secondary-action" type="button" :disabled="state.loading" @click="loadTrackingAnalytics(0)">
+            <button class="secondary-action" type="button" :disabled="state.loading" @click="loadTrackingAnalytics(0, 0)">
               <RefreshCw :size="16" /> 刷新
             </button>
           </div>
@@ -3017,6 +3085,11 @@ const App = {
                   </tr>
                 </tbody>
               </table>
+            </div>
+            <div class="pagination">
+              <span>第 {{ state.trackingLinkPage.page + 1 }} 页 / 共 {{ state.trackingLinkPage.totalPages || 1 }} 页</span>
+              <button type="button" :disabled="!state.trackingLinkPage.hasPrevious" @click="changeTrackingLinkPage(state.trackingLinkPage.page - 1)">上一页</button>
+              <button type="button" :disabled="!state.trackingLinkPage.hasNext" @click="changeTrackingLinkPage(state.trackingLinkPage.page + 1)">下一页</button>
             </div>
           </article>
         </section>

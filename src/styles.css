@@ -430,6 +430,63 @@ select[multiple] {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.dashboard-country-panel {
+  margin-bottom: 18px;
+}
+
+.country-stat-list {
+  display: grid;
+  gap: 10px;
+}
+
+.country-stat-row {
+  display: grid;
+  grid-template-columns: minmax(80px, 160px) minmax(120px, 1fr) 64px 52px;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #dce4eb;
+  border-radius: 7px;
+  padding: 11px 12px;
+  background: #f8fafb;
+  color: #101820;
+  text-align: left;
+}
+
+.country-stat-row:hover {
+  border-color: #9bcfc8;
+  background: #fff;
+}
+
+.country-stat-name {
+  font-weight: 850;
+}
+
+.country-stat-bar {
+  overflow: hidden;
+  height: 9px;
+  border-radius: 999px;
+  background: #e5edf1;
+}
+
+.country-stat-bar i {
+  display: block;
+  height: 100%;
+  min-width: 4px;
+  border-radius: inherit;
+  background: #0f766e;
+}
+
+.country-stat-row strong {
+  text-align: right;
+  font-size: 17px;
+}
+
+.country-stat-row small {
+  color: #697787;
+  font-weight: 800;
+  text-align: right;
+}
+
 .stat-card {
   display: grid;
   grid-template-columns: 34px 1fr;
@@ -2030,6 +2087,11 @@ td span {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .country-stat-row {
+    grid-template-columns: minmax(70px, 110px) minmax(90px, 1fr) 52px 44px;
+    gap: 8px;
+  }
+
   .search-box {
     width: 100%;
   }
@@ -2081,6 +2143,15 @@ td span {
 
   .stats-grid {
     grid-template-columns: 1fr;
+  }
+
+  .country-stat-row {
+    grid-template-columns: 1fr 48px;
+  }
+
+  .country-stat-bar,
+  .country-stat-row small {
+    grid-column: 1 / -1;
   }
 }
 

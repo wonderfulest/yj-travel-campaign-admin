@@ -26,6 +26,14 @@ assert(
 )
 
 assert(
+  /customerCountryStats/.test(source) &&
+    /customersByCountry/.test(source) &&
+    /客户资产国家分布/.test(source) &&
+    /country-stat-row/.test(source),
+  'dashboard must render customer asset statistics grouped by country'
+)
+
+assert(
   !/const withEmail = state\.customers\.filter/.test(source) &&
     !/const pending = state\.customers\.filter/.test(source),
   'dashboard customer totals must not be calculated from the current customer page'
