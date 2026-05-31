@@ -6,7 +6,9 @@ function readSourceFiles(directoryUrl) {
     .flatMap((entry) => {
       const entryUrl = new URL(`${entry.name}${entry.isDirectory() ? '/' : ''}`, directoryUrl)
       if (entry.isDirectory()) return readSourceFiles(entryUrl)
-      return entry.name.endsWith('.js') ? [readFileSync(entryUrl, 'utf8')] : []
+      return entry.name.endsWith('.js') || entry.name.endsWith('.ts') || entry.name.endsWith('.vue')
+        ? [readFileSync(entryUrl, 'utf8')]
+        : []
     })
 }
 
@@ -24,8 +26,7 @@ assert(
 )
 
 assert(
-  /function extractApiErrorMessage\(response, text\)/.test(source) &&
-    /extractApiErrorMessage\(response, text\)/.test(source) &&
+  /extractApiErrorMessage\(response, text\)/.test(source) &&
     /JSON\.parse\(text\)/.test(source) &&
     /parsed\.detail/.test(source),
   'API request failures must prefer backend ProblemDetail.detail over generic HTTP or auth messages'
@@ -45,6 +46,13 @@ assert(
 assert(
   /request\('\/api\/segments\/summary'\)/.test(source),
   'dashboard customer segment readiness must be loaded from /api/segments/summary'
+)
+
+assert(
+  !/德国有邮箱旅行社|德国市场第一批可触达旅行社/.test(source) &&
+    /segmentForm:\s*\{[\s\S]*name: ''[\s\S]*description: ''[\s\S]*rules: \[\]/.test(source) &&
+    /function resetSegmentForm\(\)[\s\S]*name: ''[\s\S]*description: ''[\s\S]*rules: \[\]/.test(source),
+  'new customer segment form must not default name, description, or dynamic rules'
 )
 
 assert(
@@ -85,6 +93,13 @@ assert(
 )
 
 assert(
+  /openCustomerCreate/.test(source) &&
+    /手动录入/.test(source) &&
+    /request\('\/api\/customers'[\s\S]*method: 'POST'/.test(source),
+  'customer asset page must support manually creating customers through POST /api/customers'
+)
+
+assert(
   /updateEmailQuality/.test(source) && /VERIFIED/.test(source),
   'customer asset page must expose manual email quality updates'
 )
@@ -120,13 +135,19 @@ assert(
 )
 
 assert(
-  /ACTIVE_NAV_STORAGE_KEY = 'lead_admin_active_nav'/.test(source) &&
-    /CUSTOMER_TOOL_STORAGE_KEY = 'lead_admin_customer_tool'/.test(source) &&
-    /activeNav: localStorage\.getItem\(ACTIVE_NAV_STORAGE_KEY\) \|\| 'dashboard'/.test(source) &&
-    /function activateNav\(nav\)[\s\S]*persistNavigationState\(\)/.test(source) &&
+  /import router from '\.\.\/router'/.test(source) &&
+    /ACTIVE_NAV_STORAGE_KEY = 'travel_admin_active_nav'/.test(source) &&
+    /CUSTOMER_TOOL_STORAGE_KEY = 'travel_admin_customer_tool'/.test(source) &&
+    /ADMIN_NAV_QUERY_KEY = 'nav'/.test(source) &&
+    /function initialAdminNav\(\)[\s\S]*resolveNavigationFromLocation\(window\.location\.pathname, queryNav\)[\s\S]*localStorage\.getItem\(ACTIVE_NAV_STORAGE_KEY\)[\s\S]*'dashboard'/.test(source) &&
+    /activeNav: initialAdminNav\(\)/.test(source) &&
+    /function activateNav\(nav\)[\s\S]*persistNavigationState\(\)[\s\S]*router\.push\(navToPath\(nav, state\.customerTool\)\)/.test(source) &&
     /function normalizeActiveNavAccess\(\)/.test(source) &&
-    /if \(state\.token\) \{[\s\S]*normalizeActiveNavAccess\(\)[\s\S]*refreshAll\(\)/.test(source),
-  'admin must restore the previous page after refresh and normalize inaccessible saved navigation'
+    /function syncNavigationFromRoute\(pathname, queryNav = ''\)[\s\S]*resolveNavigationFromLocation\(pathname, queryNav\)/.test(source) &&
+    /if \(state\.token\) \{[\s\S]*normalizeActiveNavAccess\(\)[\s\S]*refreshAll\(\)/.test(source) &&
+    /router\.replace\(navToPath\(state\.activeNav, state\.customerTool\)\)/.test(source) &&
+    /router\.replace\('\/login'\)/.test(source),
+  'admin must restore deep-linked or saved navigation and normalize inaccessible pages after refresh'
 )
 
 assert(
@@ -136,28 +157,41 @@ assert(
 )
 
 assert(
-  /const CAMPAIGN_NEXT_ACTION_BY_STATUS[\s\S]*DRAFT: 'simulateSend'[\s\S]*SIMULATED: 'prePush'[\s\S]*PREVIEW_GENERATED: 'confirm'/.test(source) &&
+  /const CAMPAIGN_NEXT_ACTION_BY_STATUS[\s\S]*DRAFT: 'saveDraft'[\s\S]*CONFIGURED: 'simulateSend'[\s\S]*SIMULATED: 'prePush'[\s\S]*PREVIEW_GENERATED: 'confirm'/.test(source) &&
+    /const CAMPAIGN_STATUS_LABELS[\s\S]*CONFIGURED: '模拟发送'/.test(source) &&
     !/review: '审核通过'/.test(source) &&
     !/\/api\/campaigns\/\$\{campaignId\}\/review/.test(source) &&
-    /rollback: index === currentIndex - 1/.test(source) &&
+    /rollback: campaignCurrentStatus\.value !== 'CONFIRMED' && index === currentIndex - 1/.test(source) &&
     /\/api\/campaigns\/\$\{state\.selectedCampaign\.id\}\/rollback/.test(source) &&
     /isCampaignStepDisabled\(step\)/.test(source) &&
+    /推送完成后状态不可修改/.test(source) &&
     /只能回退到上一步或确认进入下一步/.test(source),
-  'mail campaign lifecycle must only allow rollback to the previous step or advancing one step'
+  'mail campaign lifecycle must only allow rollback to the previous step before final push and lock confirmed campaigns'
 )
 
 assert(
   /function campaignPrePushBlockReason\(\)[\s\S]*!state\.selectedCampaign\.channelId[\s\S]*请先保存活动配置以绑定推送通道/.test(source) &&
     /campaignNextAction\.value === 'prePush'[\s\S]*campaignPrePushBlockReason\(\)/.test(source) &&
-    /advanceCampaignStep\([^)]*\)[\s\S]*state\.error = reason/.test(source),
+    /runCampaignAction\([^)]*\)[\s\S]*state\.error = reason/.test(source),
   'mail campaign pre-push must require saved template, channel, and segment setup before calling the backend'
 )
 
 assert(
-    /function isCampaignAdvanceDisabled\(\)[\s\S]*if \(state\.selectedCampaign\?\.id\) return false[\s\S]*campaignNextAction\.value !== 'simulateSend'/.test(source) &&
-    /async function saveCampaignDraftForAdvance\(\)[\s\S]*\/api\/campaigns'[\s\S]*\/template`[\s\S]*\/tracking-link`[\s\S]*\/channel`[\s\S]*\/segments`/.test(source) &&
-    /advanceCampaignStep\([^)]*\)[\s\S]*campaignNextAction\.value !== 'simulateSend'[\s\S]*const campaign = await saveCampaignDraftForAdvance\(\)[\s\S]*\/advance`/.test(source),
-  'mail campaign lifecycle advance must keep the draft-step button clickable and persist setup before simulation'
+    /function isCampaignAdvanceDisabled\(\)[\s\S]*if \(state\.selectedCampaign\?\.id\) return false[\s\S]*campaignNextAction\.value !== 'saveDraft'/.test(source) &&
+    /async function saveCampaignDraftForAdvance\(\)[\s\S]*\/api\/campaigns'[\s\S]*\/template`[\s\S]*fillCampaignForm\(campaign\)/.test(source) &&
+    !/async function saveCampaignDraftForAdvance\(\)[\s\S]*请先选择推送通道[\s\S]*\/template`/.test(source) &&
+    !/async function saveCampaignDraftForAdvance\(\)[\s\S]*\/tracking-link`[\s\S]*\/channel`[\s\S]*\/segments`/.test(source) &&
+    /advanceCampaignStep\([^)]*\)[\s\S]*campaignNextAction\.value !== 'saveDraft'[\s\S]*const campaign = await saveCampaignDraftForAdvance\(\)/.test(source) &&
+    !/advanceCampaignStep\([^)]*\)[\s\S]*\/advance`/.test(source),
+  'mail campaign lifecycle advance must keep the draft-step button clickable, persist the draft template first, and never call the generic advance endpoint'
+)
+
+assert(
+  /function runCampaignAction\([^)]*\)[\s\S]*\/simulate-send`/.test(source) &&
+    /function runCampaignAction\([^)]*\)[\s\S]*\/pre-push`/.test(source) &&
+    /function runCampaignAction\([^)]*\)[\s\S]*\/confirm`/.test(source) &&
+    /advanceCampaignStep\([^)]*\)[\s\S]*runCampaignAction\(campaignNextAction\.value, options\)/.test(source),
+  'mail campaign lifecycle confirmation must call independent business endpoints for simulation, pre-push generation, and final push'
 )
 
 assert(
@@ -189,11 +223,12 @@ assert(
     /\/api\/campaigns\/test-emails/.test(source) &&
     /deleteTestEmail/.test(source) &&
     /testEmails: state\.selectedTestEmails/.test(source) &&
-    /campaignNextAction\.value === 'simulateSend' && !options\.confirmedTestEmails/.test(source) &&
+    /action === 'simulateSend' && !options\.confirmedTestEmails/.test(source) &&
+    /action === 'simulateSend'[\s\S]*closeTestEmailDialog\(\)[\s\S]*state\.selectedTestEmails = \[\][\s\S]*模拟发送成功/.test(source) &&
     /advanceCampaignStep\(\{ confirmedTestEmails: true \}\)/.test(source) &&
     /选择测试邮箱/.test(source) &&
     /模拟发送到测试邮箱/.test(source),
-  'mail campaign simulation must always open the persisted tenant test email dialog before advancing'
+  'mail campaign simulation must open the persisted tenant test email dialog, close it after success, and show a success notice'
 )
 
 assert(

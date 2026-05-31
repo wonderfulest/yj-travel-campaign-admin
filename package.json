@@ -1,5 +1,5 @@
 {
-  "name": "yj-lead-admin",
+  "name": "yj-travel-admin",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -13,7 +13,8 @@
     "@vitejs/plugin-vue": "^5.2.1",
     "vite": "^6.0.5",
     "vue": "^3.5.13",
-    "lucide-vue-next": "^0.468.0"
+    "lucide-vue-next": "^0.468.0",
+    "vue-router": "^4.5.1"
   },
   "devDependencies": {}
 }

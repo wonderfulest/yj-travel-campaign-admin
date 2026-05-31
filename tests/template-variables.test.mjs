@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 
 import { readFileSync } from 'node:fs'
 
-import { scanTemplateVariableKeys, syncTemplateVariables } from '../src/template-variables.js'
+import { renderTemplatePreview, scanTemplateVariableKeys, syncTemplateVariables } from '../src/utils/templateVariables.ts'
 
 const existingVariables = [
   { key: 'customerName', label: '客户名称', sampleValue: 'Reisen Scala', required: true },
@@ -40,9 +40,27 @@ assert.equal(
   'variable config entries absent from subject and HTML must be removed'
 )
 
-const defaultTemplate = readFileSync(new URL('../src/templates/pioneer-china-email.html', import.meta.url), 'utf8')
+const defaultTemplate = readFileSync(new URL('../src/assets/templates/pioneer-china-email.html', import.meta.url), 'utf8')
 
 assert(
   scanTemplateVariableKeys(defaultTemplate).includes('trackingLink'),
   'default email HTML template must include the trackingLink short-link parameter'
+)
+
+const renderedPreview = renderTemplatePreview({
+  subject: 'Special offer for ${customerName}',
+  htmlBody: '<p>Hello ${customerName}, book with ${companyName}</p>',
+  variables: existingVariables
+})
+
+assert.equal(
+  renderedPreview.subjectPreview,
+  'Special offer for Reisen Scala',
+  'local template preview must render subject placeholders with sample values'
+)
+
+assert.equal(
+  renderedPreview.htmlPreview,
+  '<p>Hello Reisen Scala, book with Youjie Tech</p>',
+  'local template preview must render HTML placeholders with sample values'
 )

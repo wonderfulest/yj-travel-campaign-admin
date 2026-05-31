@@ -1,18 +1,5 @@
-import { KeyRound, Mail } from 'lucide-vue-next'
+<template>
 
-export const AuthView = {
-  components: {
-    KeyRound,
-    Mail
-  },
-  props: {
-    state: {
-      type: Object,
-      required: true
-    }
-  },
-  emits: ['login'],
-  template: `
     <main class="auth-shell">
       <section class="auth-panel">
         <div class="brand-lockup">
@@ -26,7 +13,7 @@ export const AuthView = {
           <button :class="{active: state.authMode === 'login'}" @click="state.authMode = 'login'">登录</button>
           <button :class="{active: state.authMode === 'register'}" @click="state.authMode = 'register'">注册租户</button>
         </div>
-        <form class="auth-form" @submit.prevent="$emit('login')">
+        <form class="auth-form" @submit.prevent="login">
           <label v-if="state.authMode === 'register'">
             租户名称
             <input v-model="state.authForm.tenantName" autocomplete="organization" />
@@ -51,5 +38,10 @@ export const AuthView = {
         <p v-if="state.error" class="message error">{{ state.error }}</p>
       </section>
     </main>
-  `
-}
+</template>
+<script setup lang="ts">
+import { KeyRound, Mail } from 'lucide-vue-next'
+import * as admin from '../../state/adminApp'
+
+const { state, login } = admin
+</script>

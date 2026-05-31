@@ -1,6 +1,6 @@
-# yj-lead-admin
+# yj-travel-admin
 
-Vue 3 + Vite 实现的邮箱获客后台，用来配合 `yj-lead-api` 使用。
+Vue 3 + Vite 实现的邮箱获客后台，用来配合 `yj-travel-api` 使用。
 
 ## 功能
 

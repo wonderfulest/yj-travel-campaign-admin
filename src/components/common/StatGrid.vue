@@ -1,16 +1,5 @@
-export const StatGrid = {
-  props: {
-    stats: {
-      type: Array,
-      required: true
-    },
-    canAccessNav: {
-      type: Function,
-      required: true
-    }
-  },
-  emits: ['open-stat-target'],
-  template: `
+<template>
+
     <section class="stats-grid">
       <button
         v-for="item in stats"
@@ -18,12 +7,16 @@ export const StatGrid = {
         class="stat-card"
         type="button"
         :disabled="!canAccessNav(item.target)"
-        @click="$emit('open-stat-target', item)"
+        @click="openStatTarget(item)"
       >
         <component :is="item.icon" :size="20" />
         <span>{{ item.label }}</span>
         <strong>{{ item.value }}</strong>
       </button>
     </section>
-  `
-}
+</template>
+<script setup lang="ts">
+import * as admin from '../../state/adminApp'
+
+const { stats, canAccessNav, openStatTarget } = admin
+</script>
