@@ -39,7 +39,7 @@
 
 <script setup lang="ts">
 import { computed, watch, onMounted } from 'vue'
-import { useDictionaryStore } from '../../stores/dictionary'
+import * as admin from '../../state/adminApp'
 
 interface LocationValue {
   country: string
@@ -70,24 +70,22 @@ const emit = defineEmits<{
   'update:modelValue': [value: LocationValue]
 }>()
 
-const dictionary = useDictionaryStore()
-
-const loading = computed(() => dictionary.loading)
-const countries = computed(() => dictionary.countries)
+const loading = computed(() => admin.state.dictionary.loading)
+const countries = computed(() => admin.state.dictionary.countries)
 const availableCities = computed(() => {
   if (!props.modelValue.country) return []
-  return dictionary.getCitiesByCountry(props.modelValue.country)
+  return admin.getCitiesByCountryId(props.modelValue.country)
 })
 
 onMounted(() => {
-  dictionary.loadCountries()
+  admin.loadDictionaryCountries()
 })
 
 watch(
   () => props.modelValue.country,
   (newCountry, oldCountry) => {
     if (newCountry && newCountry !== oldCountry) {
-      dictionary.loadCities(newCountry)
+      admin.loadDictionaryCities(newCountry)
     }
   },
   { immediate: true }

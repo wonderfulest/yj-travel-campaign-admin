@@ -524,6 +524,7 @@ import {
   X,
 } from "lucide-vue-next";
 import * as admin from "../../state/adminApp";
+import LocationSelect from "../../components/common/LocationSelect.vue";
 
 const {
   state,

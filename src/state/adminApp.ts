@@ -2332,6 +2332,69 @@ export function onFileChange(event) {
   state.importFile = event.target.files?.[0] || null
 }
 
+export async function loadDictionaryCountries() {
+  if (state.dictionary.countries.length > 0) return
+  state.dictionary.loading = true
+  state.dictionary.error = ''
+  try {
+    if (state.token === 'demo-token') {
+      state.dictionary.countries = [
+        { id: 'CN', alpha3: 'CHN', name: '{"zh":"中国","en":"China"}', languages: 'zh' },
+        { id: 'DE', alpha3: 'DEU', name: '{"zh":"德国","en":"Germany"}', languages: 'de' },
+        { id: 'US', alpha3: 'USA', name: '{"zh":"美国","en":"United States"}', languages: 'en' }
+      ]
+      return
+    }
+    const countries = await request('/api/dictionary/countries')
+    state.dictionary.countries = countries || []
+  } catch (error) {
+    state.dictionary.error = error.message || '加载国家列表失败'
+    console.error('Failed to load countries:', error)
+  } finally {
+    state.dictionary.loading = false
+  }
+}
+
+export async function loadDictionaryCities(countryId: string) {
+  if (!countryId) return
+  if (state.dictionary.citiesCache[countryId]) return
+  state.dictionary.loading = true
+  state.dictionary.error = ''
+  try {
+    if (state.token === 'demo-token') {
+      const demoCities: Record<string, Array<{id: string, name: string, fullName: string, timezone: string}>> = {
+        CN: [
+          { id: 'CN_BJ', name: '{"zh":"北京"}', fullName: '{"zh":"北京市"}', timezone: 'Asia/Shanghai' },
+          { id: 'CN_SH', name: '{"zh":"上海"}', fullName: '{"zh":"上海市"}', timezone: 'Asia/Shanghai' }
+        ],
+        DE: [
+          { id: 'DE_BERLIN', name: '{"zh":"柏林","en":"Berlin"}', fullName: '{"zh":"柏林","en":"Berlin"}', timezone: 'Europe/Berlin' },
+          { id: 'DE_MUNICH', name: '{"zh":"慕尼黑","en":"Munich"}', fullName: '{"zh":"慕尼黑","en":"Munich"}', timezone: 'Europe/Berlin' }
+        ]
+      }
+      state.dictionary.citiesCache[countryId] = demoCities[countryId] || []
+      return
+    }
+    const cities = await request(`/api/dictionary/cities?countryId=${encodeURIComponent(countryId)}`)
+    state.dictionary.citiesCache[countryId] = cities || []
+  } catch (error) {
+    state.dictionary.error = error.message || '加载城市列表失败'
+    console.error('Failed to load cities:', error)
+  } finally {
+    state.dictionary.loading = false
+  }
+}
+
+export function getCitiesByCountryId(countryId: string) {
+  return state.dictionary.citiesCache[countryId] || []
+}
+
+export function clearDictionaryCache() {
+  state.dictionary.countries = []
+  state.dictionary.citiesCache = {}
+  state.dictionary.error = ''
+}
+
 updateLocalTemplatePreview()
 
 if (state.token) {
