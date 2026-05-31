@@ -1,6 +1,6 @@
 <template>
 
-<section v-if="canAccessNav('imports') && state.activeNav === 'customers' && state.customerTool === 'imports'" class="utility-page">
+<section class="utility-page">
             <article class="ops-panel">
               <div class="panel-title">
                 <FileUp :size="19" />
@@ -34,7 +34,6 @@ import * as admin from '../../state/index'
 
 const {
   state,
-  canAccessNav,
   onFileChange,
   importCustomerJson
 } = admin

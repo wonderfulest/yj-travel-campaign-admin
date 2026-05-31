@@ -1,6 +1,6 @@
 <template>
 
-<section v-if="canAccessNav('channels') && state.activeNav === 'channels'" class="channel-page">
+<section v-if="canAccessNav('channels')" class="channel-page">
           <article class="table-panel">
             <div class="panel-header">
               <div>
@@ -26,7 +26,17 @@
                     </small>
                     <small>{{ channel.fromEmail }} / {{ channel.replyTo || '无回复邮箱' }}</small>
                   </div>
-                  <strong>{{ channel.status }}</strong>
+                  <div class="channel-row-actions">
+                    <strong>{{ channel.status }}</strong>
+                    <button class="row-action" type="button" :disabled="state.loading" @click="editChannel(channel)">
+                      <Pencil :size="14" />
+                      编辑
+                    </button>
+                    <button class="row-action danger" type="button" :disabled="state.loading" @click="deleteChannel(channel)">
+                      <Trash2 :size="14" />
+                      删除
+                    </button>
+                  </div>
                 </li>
               </ul>
             </div>
@@ -58,17 +68,17 @@
             <article class="ops-panel">
               <div class="panel-title">
                 <PlugZap :size="19" />
-                <h3>邮件发送通道</h3>
+                <h3>{{ state.editingChannelId ? '编辑邮件发送通道' : '邮件发送通道' }}</h3>
               </div>
               <div class="channel-tabs" role="tablist" aria-label="邮件发送通道类型">
-                <button type="button" :class="{active: state.channelType === 'smtp'}" @click="state.channelType = 'smtp'">
+                <button type="button" :class="{active: state.channelType === 'smtp'}" :disabled="Boolean(state.editingChannelId)" @click="state.channelType = 'smtp'">
                   SMTP 通道
                 </button>
-                <button type="button" :class="{active: state.channelType === 'aws-ses'}" @click="state.channelType = 'aws-ses'">
+                <button type="button" :class="{active: state.channelType === 'aws-ses'}" :disabled="Boolean(state.editingChannelId)" @click="state.channelType = 'aws-ses'">
                   AWS SES 通道
                 </button>
               </div>
-              <form class="ops-form" @submit.prevent="createChannel">
+              <form class="ops-form" @submit.prevent="saveChannel">
                 <template v-if="state.channelType === 'smtp'">
                   <label>通道名称<input v-model="state.smtpForm.name" /></label>
                   <label>SMTP Host<input v-model="state.smtpForm.smtpHost" /></label>
@@ -82,7 +92,7 @@
                     </select>
                   </label>
                   <label>Username<input v-model="state.smtpForm.smtpUsername" autocomplete="off" /></label>
-                  <label>Password<input v-model="state.smtpForm.smtpPassword" type="password" autocomplete="new-password" /></label>
+                  <label>Password<input v-model="state.smtpForm.smtpPassword" type="password" autocomplete="new-password" :placeholder="state.editingChannelId ? '留空则不修改密码' : ''" /></label>
                   <label>发件邮箱<input v-model="state.smtpForm.fromEmail" type="email" /></label>
                   <label>发件名称<input v-model="state.smtpForm.fromName" /></label>
                   <label>回复邮箱<input v-model="state.smtpForm.replyTo" type="email" /></label>
@@ -91,7 +101,7 @@
                   <label>通道名称<input v-model="state.awsSesForm.name" /></label>
                   <label>Region<input v-model="state.awsSesForm.awsRegion" /></label>
                   <label>Access Key<input v-model="state.awsSesForm.awsAccessKeyId" autocomplete="off" /></label>
-                  <label>Secret Key<input v-model="state.awsSesForm.awsSecretAccessKey" type="password" autocomplete="new-password" /></label>
+                  <label>Secret Key<input v-model="state.awsSesForm.awsSecretAccessKey" type="password" autocomplete="new-password" :placeholder="state.editingChannelId ? '留空则不修改密钥' : ''" /></label>
                   <label>发件邮箱<input v-model="state.awsSesForm.fromEmail" type="email" /></label>
                   <label>发件名称<input v-model="state.awsSesForm.fromName" /></label>
                   <label>回复邮箱<input v-model="state.awsSesForm.replyTo" type="email" /></label>
@@ -100,14 +110,17 @@
                     <strong>NOT_CHECKED</strong>
                   </div>
                 </template>
-                <button class="primary-action" :disabled="state.loading">保存通道</button>
+                <div class="channel-form-actions">
+                  <button v-if="state.editingChannelId" class="secondary-action" type="button" :disabled="state.loading" @click="cancelChannelEdit">取消编辑</button>
+                  <button class="primary-action" :disabled="state.loading">{{ state.editingChannelId ? '保存修改' : '保存通道' }}</button>
+                </div>
               </form>
             </article>
           </aside>
         </section>
 </template>
 <script setup lang="ts">
-import { PlugZap } from 'lucide-vue-next'
+import { Pencil, PlugZap, Trash2 } from 'lucide-vue-next'
 import * as admin from '../../state/index'
 
 const {
@@ -117,6 +130,9 @@ const {
   changeChannelPageSize,
   jumpChannelPage,
   changeChannelPage,
-  createChannel
+  saveChannel,
+  editChannel,
+  cancelChannelEdit,
+  deleteChannel
 } = admin
 </script>

@@ -40,6 +40,22 @@ assert(
 )
 
 assert(
+  /async function deleteChannel\(channel[^)]*\)[\s\S]*\/api\/channels\/\$\{channel\.id\}[\s\S]*method: 'DELETE'[\s\S]*await loadChannels\(/.test(source) &&
+    /@click="deleteChannel\(channel\)"/.test(source) &&
+    /删除/.test(source),
+  'push channel page must support deleting configured channels through DELETE /api/channels/{id}'
+)
+
+assert(
+  /editingChannelId:\s*null/.test(source) &&
+    /function editChannel\(channel[^)]*\)[\s\S]*editingChannelId = channel\.id/.test(source) &&
+    /async function saveChannel\(\)[\s\S]*\/api\/channels\/email\/smtp\/\$\{channelStore\.editingChannelId\}[\s\S]*method: channelStore\.editingChannelId \? 'PUT' : 'POST'/.test(source) &&
+    /@click="editChannel\(channel\)"/.test(source) &&
+    /cancelChannelEdit/.test(source),
+  'push channel page must support editing configured channels through PUT and allow cancelling edit mode'
+)
+
+assert(
   /request\('\/api\/customers\/summary'\)/.test(source),
   'dashboard customer totals must be loaded from /api/customers/summary'
 )
@@ -172,6 +188,11 @@ assert(
 assert(
   /function fillCampaignForm\(campaign[^)]*\)[\s\S]*campaignStore\.campaignForm\.subject = campaign\.template\?\.subject \|\| ''[\s\S]*campaignStore\.campaignForm\.htmlBody = campaign\.template\?\.htmlBody \|\| campaign\.template\?\.body \|\| ''[\s\S]*campaign\.template[\s\S]*parseTemplateVariables\(campaign\.template\.variablesJson, DEFAULT_TEMPLATE_VARIABLES\)[\s\S]*: \[\][\s\S]*campaignStore\.campaignForm\.trackingTargetUrl = campaign\.trackingLink\?\.targetUrl \|\| ''[\s\S]*campaignStore\.campaignForm\.trackingUtmCampaign = campaign\.trackingLink\?\.utmCampaign \|\| ''/.test(source),
   'mail campaign detail forms must not inherit template or short-link fields from stale/default form state'
+)
+
+assert(
+  !/placeholder="https:\/\/www\.example\.com\/travel-agency-partnership"|placeholder="china-trip"|placeholder="1780118309231001"|placeholder="template_a"/.test(source),
+  'mail campaign short-link dialog must not show demo tracking parameters as placeholders'
 )
 
 assert(

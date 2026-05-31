@@ -1,29 +1,56 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { navToPath, resolveNavigationFromLocation } from './navigation'
 
-const RoutePlaceholder = {
-  name: 'RoutePlaceholder',
-  render() {
-    return null
-  }
-}
-
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', redirect: '/dashboard' },
-    { path: '/login', name: 'login', component: RoutePlaceholder },
-    { path: '/dashboard', name: 'dashboard', component: RoutePlaceholder },
-    { path: '/customers', name: 'customers', component: RoutePlaceholder },
-    { path: '/customers/list', redirect: '/customers' },
-    { path: '/customers/imports', name: 'customer-imports', component: RoutePlaceholder },
-    { path: '/customers/mapping', name: 'customer-mapping', component: RoutePlaceholder },
-    { path: '/channels', name: 'channels', component: RoutePlaceholder },
-    { path: '/segments', name: 'segments', component: RoutePlaceholder },
-    { path: '/campaign-list', name: 'campaign-list', component: RoutePlaceholder },
-    { path: '/campaigns', name: 'campaigns', component: RoutePlaceholder },
-    { path: '/tracking', name: 'tracking', component: RoutePlaceholder },
-    { path: '/settings', name: 'settings', component: RoutePlaceholder },
+    { path: '/login', name: 'login', component: () => import('./views/auth/AuthView.vue') },
+    {
+      path: '/dashboard',
+      name: 'dashboard',
+      component: () => import('./views/dashboard/DashboardView.vue')
+    },
+    {
+      path: '/customers',
+      component: () => import('./views/customers/CustomersLayout.vue'),
+      children: [
+        { path: '', name: 'customers', component: () => import('./views/customers/CustomerAssetsView.vue') },
+        { path: 'list', redirect: '' },
+        { path: 'imports', name: 'customer-imports', component: () => import('./views/customers/CustomerImportView.vue') },
+        { path: 'mapping', name: 'customer-mapping', component: () => import('./views/customers/CustomerMappingView.vue') }
+      ]
+    },
+    {
+      path: '/channels',
+      name: 'channels',
+      component: () => import('./views/channels/ChannelsView.vue')
+    },
+    {
+      path: '/segments',
+      name: 'segments',
+      component: () => import('./views/segments/SegmentsView.vue')
+    },
+    {
+      path: '/campaign-list',
+      name: 'campaign-list',
+      component: () => import('./views/campaigns/CampaignListView.vue')
+    },
+    {
+      path: '/campaigns',
+      name: 'campaigns',
+      component: () => import('./views/campaigns/CampaignWorkbenchView.vue')
+    },
+    {
+      path: '/tracking',
+      name: 'tracking',
+      component: () => import('./views/tracking/TrackingView.vue')
+    },
+    {
+      path: '/settings',
+      name: 'settings',
+      component: () => import('./views/settings/SettingsView.vue')
+    },
     { path: '/:pathMatch(.*)*', redirect: '/dashboard' }
   ]
 })

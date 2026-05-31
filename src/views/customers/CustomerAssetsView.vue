@@ -1,12 +1,5 @@
 <template>
-  <section
-    v-if="
-      canAccessNav('customers') &&
-      (state.activeNav === 'dashboard' ||
-        (state.activeNav === 'customers' && state.customerTool === 'list'))
-    "
-    class="main-grid single-column"
-  >
+  <section class="main-grid single-column">
     <article class="table-panel">
       <div class="panel-header">
         <div>
@@ -323,7 +316,6 @@ const locationValue = computed({
 
 const {
   state,
-  canAccessNav,
   filteredCustomers,
   PAGE_SIZE_OPTIONS: pageSizeOptions,
   changeCustomerPageSize,

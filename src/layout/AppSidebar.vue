@@ -23,7 +23,7 @@
       <div v-for="item in availablePrimaryNavItems" :key="item.key" class="nav-group">
         <RouterLink
           class="sidebar-link"
-          :class="{active: state.activeNav === item.key, 'child-active': isNavItemActive(item) && state.activeNav !== item.key}"
+          :class="{active: isActive(item.key), 'child-active': route.path.startsWith('/campaigns') && item.key === 'campaign-list' && route.path !== '/campaign-list'}"
           :to="navToPath(item.key)"
           :title="state.sidebarCollapsed ? item.label : ''"
         >
@@ -34,7 +34,7 @@
             v-for="child in navChildItems(item.key)"
             :key="child.key"
             class="sidebar-link sub-nav-button"
-            :class="{active: state.activeNav === child.key}"
+            :class="{active: isActive(child.key)}"
             :to="navToPath(item.key, child.key)"
             :title="state.sidebarCollapsed ? child.label : ''"
           >
@@ -46,16 +46,21 @@
   </aside>
 </template>
 <script setup lang="ts">
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import { Mail, PanelLeftClose, PanelLeftOpen } from 'lucide-vue-next'
 import { navToPath } from '../navigation'
 import * as admin from '../state/index'
+
+const route = useRoute()
 
 const {
   state,
   availablePrimaryNavItems,
   navChildItems,
-  isNavItemActive,
   toggleSidebar
 } = admin
+
+function isActive(key: string): boolean {
+  return route.path === navToPath(key) || route.path.startsWith(`/${key}/`)
+}
 </script>

@@ -1,5 +1,7 @@
 <template>
 
+    <StatGrid />
+
     <section class="dashboard-analysis-grid">
       <article class="ops-panel">
         <div class="panel-title">
@@ -148,6 +150,7 @@
 </template>
 <script setup lang="ts">
 import { CheckCircle2, Globe2, Layers, Send } from 'lucide-vue-next'
+import StatGrid from '../../components/common/StatGrid.vue'
 import * as admin from '../../state/index'
 
 const {

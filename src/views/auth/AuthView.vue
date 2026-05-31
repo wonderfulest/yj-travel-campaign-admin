@@ -13,7 +13,7 @@
           <button :class="{active: state.authMode === 'login'}" @click="state.authMode = 'login'">登录</button>
           <button :class="{active: state.authMode === 'register'}" @click="state.authMode = 'register'">注册租户</button>
         </div>
-        <form class="auth-form" @submit.prevent="login">
+        <form class="auth-form" @submit.prevent="login()">
           <label v-if="state.authMode === 'register'">
             租户名称
             <input v-model="state.authForm.tenantName" autocomplete="organization" />

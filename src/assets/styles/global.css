@@ -2192,6 +2192,11 @@ td span {
   box-shadow: 0 1px 4px rgba(20, 33, 46, 0.08);
 }
 
+.channel-tabs button:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
 .channel-list {
   display: grid;
   gap: 8px;
@@ -2236,6 +2241,19 @@ td span {
 
 .channel-list strong {
   color: #0f766e;
+}
+
+.channel-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.channel-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .channel-table {

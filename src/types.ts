@@ -168,6 +168,7 @@ export interface Channel {
   id: string | number
   name: string
   type: ChannelType
+  channelType: string
   fromEmail: string
   fromName: string
   replyTo?: string
@@ -177,6 +178,8 @@ export interface Channel {
   smtpUsername?: string
   awsRegion?: string
   awsAccessKeyId?: string
+  sesIdentityStatus?: string
+  status?: string
 }
 
 export interface SmtpForm {

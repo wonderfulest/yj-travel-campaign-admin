@@ -12,13 +12,13 @@
               </button>
             </div>
             <form class="ops-form" @submit.prevent="saveCampaignTrackingLink">
-              <label>目标长链接<input v-model="state.campaignForm.trackingTargetUrl" placeholder="https://www.example.com/travel-agency-partnership" /></label>
-              <label>短链接码<input v-model="state.campaignForm.trackingShortCode" placeholder="china-trip" /></label>
+              <label>目标长链接<input v-model="state.campaignForm.trackingTargetUrl" /></label>
+              <label>短链接码<input v-model="state.campaignForm.trackingShortCode" /></label>
               <div class="utm-grid">
-                <label>UTM Source<input v-model="state.campaignForm.trackingUtmSource" placeholder="email" /></label>
-                <label>UTM Medium<input v-model="state.campaignForm.trackingUtmMedium" placeholder="email" /></label>
-                <label>UTM Campaign<input v-model="state.campaignForm.trackingUtmCampaign" placeholder="1780118309231001" /></label>
-                <label>UTM Content<input v-model="state.campaignForm.trackingUtmContent" placeholder="template_a" /></label>
+                <label>UTM Source<input v-model="state.campaignForm.trackingUtmSource" /></label>
+                <label>UTM Medium<input v-model="state.campaignForm.trackingUtmMedium" /></label>
+                <label>UTM Campaign<input v-model="state.campaignForm.trackingUtmCampaign" /></label>
+                <label>UTM Content<input v-model="state.campaignForm.trackingUtmContent" /></label>
                 <label>UTM Term<input v-model="state.campaignForm.trackingUtmTerm" /></label>
               </div>
               <div class="modal-actions">

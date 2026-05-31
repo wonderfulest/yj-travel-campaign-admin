@@ -1,6 +1,6 @@
 <template>
 
-<section v-if="canAccessNav('mapping') && state.activeNav === 'customers' && state.customerTool === 'mapping'" class="mapping-page">
+<section class="mapping-page">
           <article class="table-panel">
             <div class="panel-header">
               <div>
@@ -80,7 +80,6 @@ import * as admin from '../../state/index'
 
 const {
   state,
-  canAccessNav,
   loadMappingPreview,
   runOsmMapping
 } = admin

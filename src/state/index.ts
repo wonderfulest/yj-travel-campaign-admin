@@ -145,7 +145,7 @@ export { useCustomerStore, customerStore,
 } from './useCustomerStore'
 
 export { useChannelStore, channelStore,
-  loadChannels, createChannel,
+  loadChannels, saveChannel, createChannel, editChannel, cancelChannelEdit, deleteChannel,
   changeChannelPage, jumpChannelPage, changeChannelPageSize
 } from './useChannelStore'
 
