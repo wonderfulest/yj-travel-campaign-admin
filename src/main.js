@@ -31,6 +31,12 @@ import {
   X
 } from 'lucide-vue-next'
 import './styles.css'
+import { AppSidebar } from './components/AppSidebar.js'
+import { AppTopbar } from './components/AppTopbar.js'
+import { AuthView } from './components/AuthView.js'
+import { CustomerToolTabs } from './components/CustomerToolTabs.js'
+import { DashboardView } from './components/DashboardView.js'
+import { StatGrid } from './components/StatGrid.js'
 import pioneerChinaEmailTemplate from './templates/pioneer-china-email.html?raw'
 import {
   cloneTemplateVariables,
@@ -96,6 +102,10 @@ const demoCustomers = [
   }
 ]
 
+const ACTIVE_NAV_STORAGE_KEY = 'lead_admin_active_nav'
+const CUSTOMER_TOOL_STORAGE_KEY = 'lead_admin_customer_tool'
+const CUSTOMER_TOOLS = new Set(['list', 'imports', 'mapping'])
+
 const state = reactive({
   token: localStorage.getItem('lead_admin_token') || '',
   user: JSON.parse(localStorage.getItem('lead_admin_user') || 'null'),
@@ -106,7 +116,7 @@ const state = reactive({
     email: 'owner@example.com',
     password: 'secret123'
   },
-  activeNav: 'dashboard',
+  activeNav: localStorage.getItem(ACTIVE_NAV_STORAGE_KEY) || 'dashboard',
   sidebarCollapsed: localStorage.getItem('lead_admin_sidebar_collapsed') === 'true',
   loading: false,
   error: '',
@@ -214,6 +224,11 @@ const state = reactive({
     segmentIds: []
   },
   trackingLinkDialogOpen: false,
+  finalConfirmDialogOpen: false,
+  testEmailDialogOpen: false,
+  testEmails: [],
+  selectedTestEmails: [],
+  newTestEmail: '',
   segmentDropdownOpen: false,
   segmentDropdownQuery: '',
   templatePreviewHtml: '',
@@ -222,7 +237,9 @@ const state = reactive({
   templatePreviewLoading: false,
   mappingPreview: null,
   mappingResult: null,
-  customerTool: 'list',
+  customerTool: CUSTOMER_TOOLS.has(localStorage.getItem(CUSTOMER_TOOL_STORAGE_KEY))
+    ? localStorage.getItem(CUSTOMER_TOOL_STORAGE_KEY)
+    : 'list',
   channelType: 'smtp',
   smtpForm: {
     name: 'SMTP Gmail',
@@ -330,33 +347,28 @@ const ROLE_LABELS = {
 
 const CAMPAIGN_LIFECYCLE_STEPS = [
   { status: 'DRAFT', label: '配置草稿', hint: '模板、通道、客群' },
-  { status: 'PREVIEW_GENERATED', label: '生成预推送', hint: '锁定收件人' },
-  { status: 'REVIEW_APPROVED', label: '审核通过', hint: '确认内容合规' },
-  { status: 'SIMULATED', label: '模拟发送', hint: '只记录日志' },
-  { status: 'CONFIRMED', label: '最终确认发送', hint: '进入发送态' }
+  { status: 'SIMULATED', label: '模拟发送', hint: '发送到测试邮箱' },
+  { status: 'PREVIEW_GENERATED', label: '生成推送', hint: '记录入库' },
+  { status: 'CONFIRMED', label: '确认推送', hint: '开始执行' }
 ]
 
 const CAMPAIGN_STATUS_LABELS = {
   DRAFT: '配置草稿',
-  PREVIEW_GENERATED: '已生成预推送',
-  REVIEW_APPROVED: '审核通过',
-  REVIEW_REJECTED: '审核驳回',
   SIMULATED: '已模拟发送',
-  CONFIRMED: '最终确认发送'
+  PREVIEW_GENERATED: '已生成推送',
+  CONFIRMED: '确认推送'
 }
 
 const CAMPAIGN_NEXT_ACTION_BY_STATUS = {
-  DRAFT: 'prePush',
-  PREVIEW_GENERATED: 'review',
-  REVIEW_APPROVED: 'simulateSend',
-  SIMULATED: 'confirm'
+  DRAFT: 'simulateSend',
+  SIMULATED: 'prePush',
+  PREVIEW_GENERATED: 'confirm'
 }
 
 const CAMPAIGN_ACTION_LABELS = {
-  prePush: '生成预推送',
-  review: '审核通过',
   simulateSend: '模拟发送',
-  confirm: '最终确认发送'
+  prePush: '生成推送',
+  confirm: '确认推送'
 }
 
 function currentRoles() {
@@ -375,6 +387,7 @@ const campaignCurrentStatus = computed(() => state.selectedCampaign?.status || '
 const campaignCurrentStatusLabel = computed(() => CAMPAIGN_STATUS_LABELS[campaignCurrentStatus.value] || campaignCurrentStatus.value)
 const campaignNextAction = computed(() => CAMPAIGN_NEXT_ACTION_BY_STATUS[campaignCurrentStatus.value] || '')
 const campaignNextActionLabel = computed(() => campaignNextAction.value ? campaignActionLabel(campaignNextAction.value) : '生命周期已完成')
+const campaignAdvanceButtonLabel = computed(() => campaignNextAction.value ? '确认' : '生命周期已完成')
 const templateMissingTrackingLinkParam = computed(() => !campaignHtmlHasTrackingLinkParam())
 const editableTemplateVariableRows = computed(() =>
   state.campaignForm.templateVariables
@@ -458,9 +471,34 @@ const customerReachabilityStats = computed(() => {
   ]
 })
 const segmentReadinessStats = computed(() => state.segmentSummary || summarizeSegments(state.segments, state.customers))
+const qualityDonut = computed(() =>
+  buildDonut(customerQualityStats.value.map((item) => ({ label: statusLabel(item.status), value: item.customers })))
+)
+const reachabilityDonut = computed(() => {
+  const summary = state.customerSummary || summarizeCustomers(state.customers)
+  return buildDonut([
+    { label: '可触达客户', value: summary.reachableCustomers || 0, color: '#0f766e' },
+    { label: '不可触达客户', value: summary.unreachableCustomers || 0, color: '#ef4444' }
+  ])
+})
+const segmentReadinessBars = computed(() => {
+  const segments = Array.isArray(segmentReadinessStats.value?.topSegments) ? segmentReadinessStats.value.topSegments : []
+  const max = segments.reduce((peak, segment) => Math.max(peak, Number(segment.memberCount || 0)), 0)
+  return segments.map((segment) => {
+    const memberCount = Number(segment.memberCount || 0)
+    const reachableMemberCount = Number(segment.reachableMemberCount || 0)
+    return {
+      segmentId: segment.segmentId,
+      segmentName: segment.segmentName,
+      memberCount,
+      reachableMemberCount,
+      totalShare: max ? `${Math.round((memberCount / max) * 100)}%` : '0%',
+      reachableShare: memberCount ? `${Math.round((reachableMemberCount / memberCount) * 100)}%` : '0%'
+    }
+  })
+})
 
 function campaignLifecycleIndex(status) {
-  if (status === 'REVIEW_REJECTED') return 2
   const index = CAMPAIGN_LIFECYCLE_STEPS.findIndex((step) => step.status === status)
   return index >= 0 ? index : 0
 }
@@ -494,7 +532,7 @@ function isCampaignActionDisabled(action) {
 function isCampaignAdvanceDisabled() {
   if (state.loading || !campaignNextAction.value) return true
   if (state.selectedCampaign?.id) return false
-  return campaignNextAction.value !== 'prePush' || !state.campaignForm.name.trim()
+  return campaignNextAction.value !== 'simulateSend' || !state.campaignForm.name.trim()
 }
 
 function isCampaignStepDisabled(step) {
@@ -514,11 +552,12 @@ function campaignActionTitle(action) {
 
 function campaignAdvanceTitle() {
   if (!campaignNextAction.value) return '当前活动生命周期已完成'
-  if (!state.selectedCampaign?.id) return '保存当前草稿配置，并进入生成预推送'
+  if (!state.selectedCampaign?.id) return '保存当前草稿配置，并进入模拟发送'
   if (campaignNextAction.value === 'prePush') {
     const reason = campaignPrePushBlockReason()
     if (reason) return reason
   }
+  if (campaignNextAction.value === 'confirm') return '确认推送'
   return `确认完成当前步骤，并进入：${campaignNextActionLabel.value}`
 }
 
@@ -542,16 +581,48 @@ function normalizedTemplateVariables(variables) {
   })))
 }
 
+function persistNavigationState() {
+  localStorage.setItem(ACTIVE_NAV_STORAGE_KEY, state.activeNav)
+  localStorage.setItem(CUSTOMER_TOOL_STORAGE_KEY, state.customerTool)
+}
+
+function activateNav(nav) {
+  state.activeNav = nav
+  persistNavigationState()
+}
+
+function setCustomerToolState(tool) {
+  state.customerTool = CUSTOMER_TOOLS.has(tool) ? tool : 'list'
+  persistNavigationState()
+}
+
+function normalizeActiveNavAccess() {
+  if (canAccessNav(state.activeNav)) {
+    if (state.activeNav !== 'customers') {
+      setCustomerToolState('list')
+    } else if (!canAccessNav(state.customerTool)) {
+      setCustomerToolState('list')
+    } else {
+      persistNavigationState()
+    }
+    return
+  }
+  activateNav(availableNavItems.value[0]?.key || 'dashboard')
+  if (state.activeNav !== 'customers') {
+    setCustomerToolState('list')
+  }
+}
+
 function setActiveNav(nav) {
   if (!canAccessNav(nav)) {
     state.error = '当前角色没有访问该页面的权限'
-    state.activeNav = availableNavItems.value[0]?.key || 'dashboard'
+    activateNav(availableNavItems.value[0]?.key || 'dashboard')
     return
   }
   state.error = ''
-  state.activeNav = nav
+  activateNav(nav)
   if (nav !== 'customers') {
-    state.customerTool = 'list'
+    setCustomerToolState('list')
   }
   if (nav === 'customers' && state.customerTool === 'mapping') {
     loadMappingPreview()
@@ -606,6 +677,32 @@ function displayValue(value) {
 
 function percentValue(value) {
   return `${Math.round(Number(value || 0) * 100)}%`
+}
+
+const CHART_PALETTE = ['#0f766e', '#2563eb', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#64748b', '#0ea5e9']
+
+function buildDonut(items) {
+  const data = (items || []).filter((item) => Number(item.value) > 0)
+  const total = data.reduce((sum, item) => sum + Number(item.value || 0), 0)
+  const radius = 52
+  const circumference = 2 * Math.PI * radius
+  let offset = 0
+  const segments = data.map((item, index) => {
+    const value = Number(item.value || 0)
+    const fraction = total ? value / total : 0
+    const length = fraction * circumference
+    const segment = {
+      label: item.label,
+      value,
+      percent: Math.round(fraction * 100),
+      color: item.color || CHART_PALETTE[index % CHART_PALETTE.length],
+      dashArray: `${length} ${circumference - length}`,
+      dashOffset: -offset
+    }
+    offset += length
+    return segment
+  })
+  return { radius, circumference, total, segments }
 }
 
 function statusLabel(status) {
@@ -810,8 +907,8 @@ function setCustomerTool(tool) {
     return
   }
   state.error = ''
-  state.activeNav = 'customers'
-  state.customerTool = tool
+  activateNav('customers')
+  setCustomerToolState(tool)
   if (tool === 'mapping') {
     loadMappingPreview()
   }
@@ -937,8 +1034,22 @@ function pageQuery(pageInfo, nextPage = pageInfo.page) {
   return params.toString()
 }
 
+function boundedPage(pageInfo, pageNumber) {
+  const value = Number(pageNumber)
+  if (!Number.isFinite(value)) return null
+  const totalPages = Number(pageInfo.totalPages || 0)
+  if (!totalPages) return null
+  return Math.min(Math.max(Math.trunc(value) - 1, 0), totalPages - 1)
+}
+
 function changeCustomerPage(nextPage) {
   if (nextPage < 0 || (state.customerPage.totalPages && nextPage >= state.customerPage.totalPages)) return
+  loadCustomers(nextPage)
+}
+
+function jumpCustomerPage(pageNumber) {
+  const nextPage = boundedPage(state.customerPage, pageNumber)
+  if (nextPage === null || nextPage === state.customerPage.page) return
   loadCustomers(nextPage)
 }
 
@@ -954,6 +1065,12 @@ function changeChannelPage(nextPage) {
   loadChannels(nextPage)
 }
 
+function jumpChannelPage(pageNumber) {
+  const nextPage = boundedPage(state.channelPage, pageNumber)
+  if (nextPage === null || nextPage === state.channelPage.page) return
+  loadChannels(nextPage)
+}
+
 function changeChannelPageSize(size) {
   const nextSize = Number(size)
   if (!nextSize) return
@@ -966,6 +1083,12 @@ function changeSegmentPage(nextPage) {
   loadSegments(nextPage)
 }
 
+function jumpSegmentPage(pageNumber) {
+  const nextPage = boundedPage(state.segmentPage, pageNumber)
+  if (nextPage === null || nextPage === state.segmentPage.page) return
+  loadSegments(nextPage)
+}
+
 function changeSegmentPageSize(size) {
   const nextSize = Number(size)
   if (!nextSize) return
@@ -975,6 +1098,12 @@ function changeSegmentPageSize(size) {
 
 function changeCampaignPage(nextPage) {
   if (nextPage < 0 || (state.campaignPage.totalPages && nextPage >= state.campaignPage.totalPages)) return
+  loadCampaigns(nextPage)
+}
+
+function jumpCampaignPage(pageNumber) {
+  const nextPage = boundedPage(state.campaignPage, pageNumber)
+  if (nextPage === null || nextPage === state.campaignPage.page) return
   loadCampaigns(nextPage)
 }
 
@@ -1146,19 +1275,19 @@ function clearCampaignSelection() {
 
 function openCampaignDetail(campaign) {
   fillCampaignForm(campaign)
-  state.activeNav = 'campaigns'
+  activateNav('campaigns')
   state.error = ''
 }
 
 function openCampaignList() {
-  state.activeNav = 'campaign-list'
+  activateNav('campaign-list')
   state.error = ''
   loadCampaigns()
 }
 
 function startNewCampaign() {
   clearCampaignSelection()
-  state.activeNav = 'campaigns'
+  activateNav('campaigns')
   state.error = ''
 }
 
@@ -1254,6 +1383,106 @@ function closeTrackingLinkDialog() {
   state.trackingLinkDialogOpen = false
 }
 
+function openFinalConfirmDialog() {
+  if (!state.selectedCampaign?.id) {
+    state.error = '请先选择或创建活动'
+    return
+  }
+  state.finalConfirmDialogOpen = true
+  state.error = ''
+}
+
+function closeFinalConfirmDialog() {
+  state.finalConfirmDialogOpen = false
+}
+
+async function openTestEmailDialog() {
+  if (!state.selectedCampaign?.id) {
+    state.error = '请先选择或创建活动'
+    return
+  }
+  state.testEmailDialogOpen = true
+  state.error = ''
+  await loadTestEmails()
+}
+
+function closeTestEmailDialog() {
+  state.testEmailDialogOpen = false
+}
+
+async function loadTestEmails() {
+  if (state.token === 'demo-token') {
+    state.testEmails = []
+    return
+  }
+  try {
+    state.testEmails = await request('/api/campaigns/test-emails')
+  } catch (error) {
+    state.testEmails = []
+    state.error = `测试邮箱加载失败：${error.message}`
+  }
+}
+
+function normalizeEmailInput(email) {
+  return String(email || '').trim().toLowerCase()
+}
+
+function isTestEmailSelected(email) {
+  return state.selectedTestEmails.includes(normalizeEmailInput(email))
+}
+
+function toggleTestEmail(email) {
+  const normalized = normalizeEmailInput(email)
+  if (!normalized) return
+  if (isTestEmailSelected(normalized)) {
+    state.selectedTestEmails = state.selectedTestEmails.filter((item) => item !== normalized)
+    return
+  }
+  state.selectedTestEmails = [...state.selectedTestEmails, normalized]
+}
+
+async function addTestEmail() {
+  const email = normalizeEmailInput(state.newTestEmail)
+  if (!email) {
+    state.error = '请输入测试邮箱'
+    return
+  }
+  state.loading = true
+  state.error = ''
+  try {
+    if (state.token !== 'demo-token') {
+      await request('/api/campaigns/test-emails', {
+        method: 'POST',
+        body: JSON.stringify({ email })
+      })
+      await loadTestEmails()
+    }
+    if (!isTestEmailSelected(email)) {
+      state.selectedTestEmails = [...state.selectedTestEmails, email]
+    }
+    state.newTestEmail = ''
+  } catch (error) {
+    state.error = `测试邮箱保存失败：${error.message}`
+  } finally {
+    state.loading = false
+  }
+}
+
+async function deleteTestEmail(testEmail) {
+  if (!testEmail?.id) return
+  state.loading = true
+  state.error = ''
+  try {
+    await request(`/api/campaigns/test-emails/${testEmail.id}`, { method: 'DELETE' })
+    state.selectedTestEmails = state.selectedTestEmails.filter((email) => email !== normalizeEmailInput(testEmail.email))
+    await loadTestEmails()
+  } catch (error) {
+    state.error = `测试邮箱删除失败：${error.message}`
+  } finally {
+    state.loading = false
+  }
+}
+
 function filteredCampaignSegments() {
   const keyword = state.segmentDropdownQuery.trim().toLowerCase()
   if (!keyword) return state.segments
@@ -1297,13 +1526,31 @@ async function request(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, { ...options, headers })
   if (!response.ok) {
     const text = await response.text()
+    const message = extractApiErrorMessage(response, text)
+    if (message) {
+      throw new Error(message)
+    }
     if (response.status === 401 || response.status === 403) {
       throw new Error('当前账号没有权限或登录已失效，请退出后使用 TENANT_OWNER / TENANT_ADMIN 账号重新登录')
     }
-    throw new Error(text || `HTTP ${response.status}`)
+    throw new Error(`HTTP ${response.status}`)
   }
   const contentType = response.headers.get('content-type') || ''
   return contentType.includes('application/json') ? response.json() : response.text()
+}
+
+function extractApiErrorMessage(response, text) {
+  if (!text) return ''
+  const contentType = response.headers.get('content-type') || ''
+  if (contentType.includes('application/json')) {
+    try {
+      const parsed = JSON.parse(text)
+      return parsed.detail || parsed.message || parsed.title || ''
+    } catch {
+      return text
+    }
+  }
+  return text
 }
 
 function persistSession(result) {
@@ -1316,6 +1563,7 @@ function persistSession(result) {
   }
   localStorage.setItem('lead_admin_token', state.token)
   localStorage.setItem('lead_admin_user', JSON.stringify(state.user))
+  normalizeActiveNavAccess()
 }
 
 async function login() {
@@ -1354,9 +1602,12 @@ async function login() {
 function logout() {
   state.token = ''
   state.user = null
-  state.activeNav = 'dashboard'
+  activateNav('dashboard')
+  setCustomerToolState('list')
   localStorage.removeItem('lead_admin_token')
   localStorage.removeItem('lead_admin_user')
+  localStorage.removeItem(ACTIVE_NAV_STORAGE_KEY)
+  localStorage.removeItem(CUSTOMER_TOOL_STORAGE_KEY)
 }
 
 async function refreshAll() {
@@ -1537,6 +1788,24 @@ async function saveSegment() {
   }
 }
 
+function changeSegmentMemberPage(nextPage) {
+  if (nextPage < 0 || (state.segmentMemberPage.totalPages && nextPage >= state.segmentMemberPage.totalPages)) return
+  loadSegmentMembers(state.selectedSegment?.id, nextPage)
+}
+
+function changeSegmentMemberPageSize(size) {
+  const nextSize = Number(size)
+  if (!nextSize) return
+  state.segmentMemberPage.size = nextSize
+  loadSegmentMembers(state.selectedSegment?.id, 0)
+}
+
+function jumpSegmentMemberPage(pageNumber) {
+  const nextPage = boundedPage(state.segmentMemberPage, pageNumber)
+  if (nextPage === null || nextPage === state.segmentMemberPage.page) return
+  loadSegmentMembers(state.selectedSegment?.id, nextPage)
+}
+
 async function refreshSegment(segmentId = state.selectedSegment?.id) {
   if (!segmentId) {
     state.error = '请先选择客群'
@@ -1630,8 +1899,20 @@ function changeTrackingEventPage(nextPage) {
   loadTrackingAnalytics(nextPage)
 }
 
+function jumpTrackingEventPage(pageNumber) {
+  const nextPage = boundedPage(state.trackingEventPage, pageNumber)
+  if (nextPage === null || nextPage === state.trackingEventPage.page) return
+  loadTrackingAnalytics(nextPage)
+}
+
 function changeTrackingLinkPage(nextPage) {
   if (nextPage < 0 || (state.trackingLinkPage.totalPages && nextPage >= state.trackingLinkPage.totalPages)) return
+  loadTrackingAnalytics(state.trackingEventPage.page, nextPage)
+}
+
+function jumpTrackingLinkPage(pageNumber) {
+  const nextPage = boundedPage(state.trackingLinkPage, pageNumber)
+  if (nextPage === null || nextPage === state.trackingLinkPage.page) return
   loadTrackingAnalytics(state.trackingEventPage.page, nextPage)
 }
 
@@ -1784,7 +2065,7 @@ async function previewCampaignTemplate() {
   }
 }
 
-async function runCampaignAction(action) {
+async function runCampaignAction(action, options = {}) {
   if (!state.selectedCampaign?.id) {
     state.error = '请先选择或创建活动'
     return
@@ -1800,17 +2081,25 @@ async function runCampaignAction(action) {
       return
     }
   }
+  if (action === 'simulateSend' && !options.confirmedTestEmails) {
+    await openTestEmailDialog()
+    return
+  }
+  if (action === 'simulateSend' && !state.selectedTestEmails.length) {
+    state.error = '请选择或新增至少一个测试邮箱'
+    return
+  }
   state.loading = true
   state.error = ''
   state.notice = ''
   try {
     const campaignId = state.selectedCampaign.id
-    const options = action === 'review'
-      ? { method: 'POST', body: JSON.stringify({ decision: 'APPROVED', reason: '' }) }
-      : { method: 'POST', body: JSON.stringify({}) }
+    const options = {
+      method: 'POST',
+      body: JSON.stringify(action === 'simulateSend' ? { testEmails: state.selectedTestEmails } : {})
+    }
     const pathMap = {
       prePush: `/api/campaigns/${campaignId}/pre-push`,
-      review: `/api/campaigns/${campaignId}/review`,
       confirm: `/api/campaigns/${campaignId}/confirm`,
       simulateSend: `/api/campaigns/${campaignId}/simulate-send`
     }
@@ -1825,40 +2114,75 @@ async function runCampaignAction(action) {
   }
 }
 
-async function advanceCampaignStep() {
+async function advanceCampaignStep(options = {}) {
   if (!campaignNextAction.value) {
     state.error = '当前活动生命周期已完成'
     return
   }
-  if (!state.selectedCampaign?.id && campaignNextAction.value !== 'prePush') {
+  if (!state.selectedCampaign?.id && campaignNextAction.value !== 'simulateSend') {
     state.error = '请先选择或创建活动'
+    return
+  }
+  if (campaignNextAction.value === 'confirm' && !options.confirmedFinalPush) {
+    openFinalConfirmDialog()
     return
   }
   state.loading = true
   state.error = ''
   state.notice = ''
   try {
-    if (campaignNextAction.value === 'prePush') {
+    if (campaignNextAction.value === 'simulateSend') {
       const campaign = await saveCampaignDraftForAdvance()
       if (!campaign) return
+    }
+    if (campaignNextAction.value === 'prePush') {
       const reason = campaignPrePushBlockReason()
       if (reason) {
         state.error = reason
         return
       }
     }
+    if (campaignNextAction.value === 'simulateSend' && !options.confirmedTestEmails) {
+      await openTestEmailDialog()
+      return
+    }
+    if (campaignNextAction.value === 'simulateSend' && !state.selectedTestEmails.length) {
+      state.error = '请选择或新增至少一个测试邮箱'
+      return
+    }
+    const advancingSimulation = campaignNextAction.value === 'simulateSend'
     const campaign = await request(`/api/campaigns/${state.selectedCampaign.id}/advance`, {
       method: 'POST',
-      body: JSON.stringify({ expectedStatus: campaignCurrentStatus.value })
+      body: JSON.stringify({
+        expectedStatus: campaignCurrentStatus.value,
+        testEmails: advancingSimulation ? state.selectedTestEmails : []
+      })
     })
     fillCampaignForm(campaign)
     await loadCampaigns()
+    if (advancingSimulation) {
+      closeTestEmailDialog()
+      state.selectedTestEmails = []
+    }
     state.notice = `已确认并进入下一步：${campaignCurrentStatusLabel.value}`
   } catch (error) {
     state.error = `活动状态推进失败：${error.message}`
   } finally {
     state.loading = false
   }
+}
+
+async function confirmTestSimulation() {
+  if (!state.selectedTestEmails.length) {
+    state.error = '请选择或新增至少一个测试邮箱'
+    return
+  }
+  await advanceCampaignStep({ confirmedTestEmails: true })
+}
+
+async function confirmFinalPush() {
+  closeFinalConfirmDialog()
+  await runCampaignAction('confirm', { confirmedFinalPush: true })
 }
 
 async function rollbackCampaignStep(step) {
@@ -1948,8 +2272,8 @@ async function importOsm() {
       body: form
     })
     await loadMappingPreview()
-    state.activeNav = 'customers'
-    state.customerTool = 'mapping'
+    activateNav('customers')
+    setCustomerToolState('mapping')
     state.notice = 'OSM 数据导入完成，请预览后确认写入客户资产主表'
   } catch (error) {
     state.error = `导入失败：${error.message}`
@@ -1981,16 +2305,22 @@ function onFileChange(event) {
 }
 
 if (state.token) {
+  normalizeActiveNavAccess()
   refreshAll()
 }
 
 const App = {
   components: {
+    AppSidebar,
+    AppTopbar,
+    AuthView,
     BarChart3,
     Building2,
     ChevronDown,
     CheckCircle2,
     Code2,
+    CustomerToolTabs,
+    DashboardView,
     Database,
     Eye,
     ExternalLink,
@@ -1999,12 +2329,12 @@ const App = {
     Globe2,
     KeyRound,
     Layers,
-      LogOut,
+    LogOut,
       Mail,
       MapPin,
       PanelLeftClose,
       PanelLeftOpen,
-      Pencil,
+    Pencil,
     PlugZap,
     Plus,
     RefreshCw,
@@ -2013,6 +2343,7 @@ const App = {
     Settings,
     ShieldCheck,
     Trash2,
+    StatGrid,
     Users,
     X
   },
@@ -2028,6 +2359,9 @@ const App = {
       customerContactStats,
       customerReachabilityStats,
       segmentReadinessStats,
+      qualityDonut,
+      reachabilityDonut,
+      segmentReadinessBars,
       isLoggedIn,
       filteredCustomers,
       pageMeta,
@@ -2041,6 +2375,7 @@ const App = {
       campaignCurrentStatusLabel,
       campaignNextAction,
       campaignNextActionLabel,
+      campaignAdvanceButtonLabel,
       templateMissingTrackingLinkParam,
       editableTemplateVariableRows,
       campaignLifecycleView,
@@ -2065,6 +2400,10 @@ const App = {
       resetSegmentForm,
       changeSegmentPage,
       changeSegmentPageSize,
+      changeSegmentMemberPage,
+      changeSegmentMemberPageSize,
+      jumpSegmentPage,
+      jumpSegmentMemberPage,
       loadSegmentMembers,
       loadCampaigns,
       createCampaign,
@@ -2082,6 +2421,17 @@ const App = {
       campaignTrackingLinkPayload,
       openTrackingLinkDialog,
       closeTrackingLinkDialog,
+      openFinalConfirmDialog,
+      closeFinalConfirmDialog,
+      openTestEmailDialog,
+      closeTestEmailDialog,
+      loadTestEmails,
+      addTestEmail,
+      deleteTestEmail,
+      toggleTestEmail,
+      isTestEmailSelected,
+      confirmTestSimulation,
+      confirmFinalPush,
       filteredCampaignSegments,
       selectedCampaignSegments,
       isCampaignSegmentSelected,
@@ -2089,12 +2439,15 @@ const App = {
       removeCampaignSegment,
       changeCampaignPage,
       changeCampaignPageSize,
+      jumpCampaignPage,
       runCampaignAction,
       advanceCampaignStep,
       rollbackCampaignStep,
       loadTrackingAnalytics,
       changeTrackingEventPage,
       changeTrackingLinkPage,
+      jumpTrackingEventPage,
+      jumpTrackingLinkPage,
       copyShortLink,
       importOsm,
       loadMappingPreview,
@@ -2103,8 +2456,10 @@ const App = {
       setCustomerTool,
       changeCustomerPage,
       changeCustomerPageSize,
+      jumpCustomerPage,
       changeChannelPage,
       changeChannelPageSize,
+      jumpChannelPage,
       EMAIL_QUALITY_OPTIONS,
       updateEmailQuality,
       normalizedWebsiteUrl,
@@ -2129,221 +2484,58 @@ const App = {
     }
   },
   template: `
-    <main v-if="!isLoggedIn" class="auth-shell">
-      <section class="auth-panel">
-        <div class="brand-lockup">
-          <div class="brand-mark"><Mail :size="22" /></div>
-          <div>
-            <h1>有解获客</h1>
-            <p>邮箱获客系统后台</p>
-          </div>
-        </div>
-        <div class="auth-tabs" role="tablist">
-          <button :class="{active: state.authMode === 'login'}" @click="state.authMode = 'login'">登录</button>
-          <button :class="{active: state.authMode === 'register'}" @click="state.authMode = 'register'">注册租户</button>
-        </div>
-        <form class="auth-form" @submit.prevent="login">
-          <label v-if="state.authMode === 'register'">
-            租户名称
-            <input v-model="state.authForm.tenantName" autocomplete="organization" />
-          </label>
-          <label v-if="state.authMode === 'register'">
-            用户名称
-            <input v-model="state.authForm.displayName" autocomplete="name" />
-          </label>
-          <label>
-            登录邮箱
-            <input v-model="state.authForm.email" type="email" autocomplete="email" />
-          </label>
-          <label>
-            密码
-            <input v-model="state.authForm.password" type="password" autocomplete="current-password" />
-          </label>
-          <button class="primary-action" :disabled="state.loading">
-            <KeyRound :size="17" />
-            {{ state.authMode === 'register' ? '注册并登录' : '登录后台' }}
-          </button>
-        </form>
-        <p v-if="state.error" class="message error">{{ state.error }}</p>
-      </section>
-    </main>
+    <AuthView v-if="!isLoggedIn" :state="state" @login="login" />
 
     <main v-else class="app-shell" :class="{'sidebar-collapsed': state.sidebarCollapsed}">
-      <aside class="sidebar">
-        <div class="sidebar-header">
-          <div class="brand-lockup compact">
-            <div class="brand-mark"><Mail :size="20" /></div>
-            <div>
-              <h1>有解获客</h1>
-              <p>yj-lead-admin</p>
-            </div>
-          </div>
-          <button
-            class="sidebar-toggle"
-            type="button"
-            :aria-label="state.sidebarCollapsed ? '展开菜单栏' : '收起菜单栏'"
-            :title="state.sidebarCollapsed ? '展开菜单栏' : '收起菜单栏'"
-            @click="toggleSidebar"
-          >
-            <PanelLeftOpen v-if="state.sidebarCollapsed" :size="18" />
-            <PanelLeftClose v-else :size="18" />
-          </button>
-        </div>
-        <nav>
-          <div v-for="item in availablePrimaryNavItems" :key="item.key" class="nav-group">
-            <button
-              :class="{active: state.activeNav === item.key, 'child-active': isNavItemActive(item) && state.activeNav !== item.key}"
-              :title="state.sidebarCollapsed ? item.label : ''"
-              @click="setActiveNav(item.key)"
-            >
-              <component :is="item.icon" :size="18" />{{ item.label }}
-            </button>
-            <div v-if="navChildItems(item.key).length" class="sub-nav">
-              <button
-                v-for="child in navChildItems(item.key)"
-                :key="child.key"
-                class="sub-nav-button"
-                :class="{active: state.activeNav === child.key}"
-                :title="state.sidebarCollapsed ? child.label : ''"
-                @click="setActiveNav(child.key)"
-              >
-                <component :is="child.icon" :size="16" />{{ child.label }}
-              </button>
-            </div>
-          </div>
-        </nav>
-      </aside>
+      <AppSidebar
+        :state="state"
+        :available-primary-nav-items="availablePrimaryNavItems"
+        :nav-child-items="navChildItems"
+        :is-nav-item-active="isNavItemActive"
+        @set-active-nav="setActiveNav"
+        @toggle-sidebar="toggleSidebar"
+      />
 
       <section class="workspace">
-        <header class="topbar">
-          <div>
-            <h2>{{ pageMeta.title }}</h2>
-            <p>{{ pageMeta.description }}</p>
-          </div>
-          <div class="tenant-chip">
-            <ShieldCheck :size="17" />
-            <span>{{ primaryRoleLabel }}</span>
-            <strong>{{ state.user?.email }}</strong>
-            <button class="icon-button" @click="logout" title="退出登录"><LogOut :size="17" /></button>
-          </div>
-        </header>
+        <AppTopbar
+          :state="state"
+          :page-meta="pageMeta"
+          :primary-role-label="primaryRoleLabel"
+          @logout="logout"
+        />
 
         <p v-if="state.notice" class="message success">{{ state.notice }}</p>
         <p v-if="state.error" class="message error">{{ state.error }}</p>
 
-        <section v-if="state.activeNav === 'dashboard'" class="stats-grid">
-          <button
-            v-for="item in stats"
-            :key="item.label"
-            class="stat-card"
-            type="button"
-            :disabled="!canAccessNav(item.target)"
-            @click="openStatTarget(item)"
-          >
-            <component :is="item.icon" :size="20" />
-            <span>{{ item.label }}</span>
-            <strong>{{ item.value }}</strong>
-          </button>
-        </section>
+        <StatGrid
+          v-if="state.activeNav === 'dashboard'"
+          :stats="stats"
+          :can-access-nav="canAccessNav"
+          @open-stat-target="openStatTarget"
+        />
 
-        <section v-if="state.activeNav === 'dashboard'" class="main-grid dashboard-analysis-grid">
-          <article class="ops-panel">
-            <div class="panel-title">
-              <CheckCircle2 :size="19" />
-              <h3>数据质量</h3>
-            </div>
-            <dl class="result-list expanded">
-              <div v-for="item in customerQualityStats" :key="item.status">
-                <dt>{{ statusLabel(item.status) }}</dt>
-                <dd>{{ item.customers }}</dd>
-              </div>
-              <div v-if="!customerQualityStats.length">
-                <dt>暂无邮箱质量数据</dt>
-                <dd>0</dd>
-              </div>
-            </dl>
-            <div class="status-breakdown">
-              <span v-for="item in customerContactStats" :key="item.status">
-                {{ statusLabel(item.status) }} {{ item.customers }}
-              </span>
-            </div>
-          </article>
+        <DashboardView
+          v-if="state.activeNav === 'dashboard'"
+          :customer-quality-stats="customerQualityStats"
+          :customer-contact-stats="customerContactStats"
+          :customer-reachability-stats="customerReachabilityStats"
+          :customer-country-stats="customerCountryStats"
+          :quality-donut="qualityDonut"
+          :reachability-donut="reachabilityDonut"
+          :segment-readiness-stats="segmentReadinessStats"
+          :segment-readiness-bars="segmentReadinessBars"
+          :status-label="statusLabel"
+          :format-country-share="formatCountryShare"
+          @set-active-nav="setActiveNav"
+        />
 
-          <article class="ops-panel">
-            <div class="panel-title">
-              <Send :size="19" />
-              <h3>触达准备度</h3>
-            </div>
-            <dl class="result-list expanded">
-              <div v-for="item in customerReachabilityStats" :key="item.label">
-                <dt>{{ item.label }}</dt>
-                <dd>{{ item.value }}</dd>
-              </div>
-            </dl>
-            <p class="panel-note">可触达口径：有标准化邮箱，且未退订、未退信、未标记无效，邮箱质量不是缺失。</p>
-          </article>
-
-          <article class="ops-panel">
-            <div class="panel-title">
-              <Layers :size="19" />
-              <h3>客群准备度</h3>
-            </div>
-            <dl class="result-list expanded">
-              <div><dt>客群总数</dt><dd>{{ segmentReadinessStats.segmentCount || 0 }}</dd></div>
-              <div><dt>成员记录</dt><dd>{{ segmentReadinessStats.memberCount || 0 }}</dd></div>
-              <div><dt>去重客户</dt><dd>{{ segmentReadinessStats.uniqueCustomerCount || 0 }}</dd></div>
-              <div><dt>可触达成员</dt><dd>{{ segmentReadinessStats.reachableMemberCount || 0 }}</dd></div>
-            </dl>
-            <div v-if="segmentReadinessStats.topSegments?.length" class="segment-readiness-list">
-              <button v-for="segment in segmentReadinessStats.topSegments" :key="segment.segmentId" type="button" @click="setActiveNav('segments')">
-                <span>{{ segment.segmentName }}</span>
-                <strong>{{ segment.reachableMemberCount }} / {{ segment.memberCount }}</strong>
-              </button>
-            </div>
-          </article>
-        </section>
-
-        <section v-if="state.activeNav === 'dashboard'" class="ops-panel dashboard-country-panel">
-          <div class="panel-title">
-            <Globe2 :size="19" />
-            <h3>客户资产国家分布</h3>
-          </div>
-          <div v-if="customerCountryStats.length" class="country-stat-list">
-            <button
-              v-for="item in customerCountryStats"
-              :key="item.country"
-              class="country-stat-row"
-              type="button"
-              @click="setActiveNav('customers')"
-            >
-              <span class="country-stat-name">{{ item.country || '未填写' }}</span>
-              <span class="country-stat-bar">
-                <i :style="{ width: formatCountryShare(item.customers) }"></i>
-              </span>
-              <strong>{{ item.customers }}</strong>
-              <small>{{ formatCountryShare(item.customers) }}</small>
-            </button>
-          </div>
-          <div v-else class="empty-state compact-empty">暂无客户资产国家数据</div>
-        </section>
-
-        <section v-if="canAccessNav('customers') && state.activeNav === 'customers'" class="customer-tools">
-          <button type="button" :class="{active: state.customerTool === 'list'}" @click="setCustomerTool('list')">
-            <Database :size="17" />
-            客户资产库
-          </button>
-          <button v-if="canAccessNav('imports')" type="button" :class="{active: state.customerTool === 'imports'}" @click="setCustomerTool('imports')">
-            <FileUp :size="17" />
-            OSM 导入
-          </button>
-          <button v-if="canAccessNav('mapping')" type="button" :class="{active: state.customerTool === 'mapping'}" @click="setCustomerTool('mapping')">
-            <GitMerge :size="17" />
-            资产 Mapping
-          </button>
-          <button type="button" class="help-link" @click="state.customerHelpVisible = !state.customerHelpVisible">
-            用户提示
-          </button>
-        </section>
+        <CustomerToolTabs
+          v-if="canAccessNav('customers') && state.activeNav === 'customers'"
+          :state="state"
+          :can-access-nav="canAccessNav"
+          @set-customer-tool="setCustomerTool"
+          @toggle-help="state.customerHelpVisible = !state.customerHelpVisible"
+        />
 
         <section v-if="canAccessNav('customers') && state.activeNav === 'customers' && state.customerHelpVisible" class="customer-help">
           <div>
@@ -2514,6 +2706,10 @@ const App = {
                 </label>
               </div>
               <div class="pagination-actions">
+                <form class="page-jump-control" @submit.prevent="jumpCustomerPage($event.target.elements.page.value)">
+                  <label>跳至<input name="page" type="number" min="1" :max="state.customerPage.totalPages || 1" :value="state.customerPage.page + 1" /></label>
+                  <button type="submit" :disabled="!state.customerPage.totalPages">跳转</button>
+                </form>
                 <button type="button" :disabled="!state.customerPage.hasPrevious" @click="changeCustomerPage(state.customerPage.page - 1)">上一页</button>
                 <button type="button" :disabled="!state.customerPage.hasNext" @click="changeCustomerPage(state.customerPage.page + 1)">下一页</button>
               </div>
@@ -2575,7 +2771,8 @@ const App = {
                     </dd>
                   </div>
                   <div><dt>业务范围</dt><dd>{{ displayValue(state.customerProfile?.businessScope || profileAsset().businessScope) }}</dd></div>
-                  <div><dt>国家 / 城市</dt><dd>{{ displayValue(profileAsset().country) }} / {{ displayValue(profileAsset().city) }}</dd></div>
+                  <div><dt>国家 / 地区 / 城市</dt><dd>{{ [profileAsset().country, profileAsset().region, profileAsset().city].filter(Boolean).join(' / ') || '-' }}</dd></div>
+                  <div><dt>时区</dt><dd>{{ displayValue(state.customerProfile?.timezone || profileAsset().timezone) }}</dd></div>
                   <div>
                     <dt>街道地址</dt>
                     <dd>{{ [profileAsset().street, profileAsset().houseNumber, profileAsset().postcode].filter(Boolean).join(' ') || '-' }}</dd>
@@ -2698,6 +2895,10 @@ const App = {
                 </label>
               </div>
               <div class="pagination-actions">
+                <form class="page-jump-control" @submit.prevent="jumpChannelPage($event.target.elements.page.value)">
+                  <label>跳至<input name="page" type="number" min="1" :max="state.channelPage.totalPages || 1" :value="state.channelPage.page + 1" /></label>
+                  <button type="submit" :disabled="!state.channelPage.totalPages">跳转</button>
+                </form>
                 <button type="button" :disabled="!state.channelPage.hasPrevious" @click="changeChannelPage(state.channelPage.page - 1)">上一页</button>
                 <button type="button" :disabled="!state.channelPage.hasNext" @click="changeChannelPage(state.channelPage.page + 1)">下一页</button>
               </div>
@@ -2828,6 +3029,10 @@ const App = {
                 </label>
               </div>
               <div class="pagination-actions">
+                <form class="page-jump-control" @submit.prevent="jumpSegmentPage($event.target.elements.page.value)">
+                  <label>跳至<input name="page" type="number" min="1" :max="state.segmentPage.totalPages || 1" :value="state.segmentPage.page + 1" /></label>
+                  <button type="submit" :disabled="!state.segmentPage.totalPages">跳转</button>
+                </form>
                 <button type="button" :disabled="!state.segmentPage.hasPrevious" @click="changeSegmentPage(state.segmentPage.page - 1)">上一页</button>
                 <button type="button" :disabled="!state.segmentPage.hasNext" @click="changeSegmentPage(state.segmentPage.page + 1)">下一页</button>
               </div>
@@ -2860,6 +3065,26 @@ const App = {
                   </tr>
                 </tbody>
               </table>
+            </div>
+            <div class="pagination-bar compact-pagination">
+              <div class="pagination-meta">
+                <span>共 {{ state.segmentMemberPage.totalItems }} 条，当前第 {{ state.segmentMemberPage.totalPages ? state.segmentMemberPage.page + 1 : 0 }} / {{ state.segmentMemberPage.totalPages }} 页</span>
+                <label class="page-size-control">
+                  每页
+                  <select v-model.number="state.segmentMemberPage.size" @change="changeSegmentMemberPageSize(state.segmentMemberPage.size)">
+                    <option v-for="size in pageSizeOptions" :key="size" :value="size">{{ size }}</option>
+                  </select>
+                  条
+                </label>
+              </div>
+              <div class="pagination-actions">
+                <form class="page-jump-control" @submit.prevent="jumpSegmentMemberPage($event.target.elements.page.value)">
+                  <label>跳至<input name="page" type="number" min="1" :max="state.segmentMemberPage.totalPages || 1" :value="state.segmentMemberPage.page + 1" /></label>
+                  <button type="submit" :disabled="!state.segmentMemberPage.totalPages">跳转</button>
+                </form>
+                <button type="button" :disabled="!state.segmentMemberPage.hasPrevious" @click="changeSegmentMemberPage(state.segmentMemberPage.page - 1)">上一页</button>
+                <button type="button" :disabled="!state.segmentMemberPage.hasNext" @click="changeSegmentMemberPage(state.segmentMemberPage.page + 1)">下一页</button>
+              </div>
             </div>
           </article>
 
@@ -2981,6 +3206,10 @@ const App = {
                 </label>
               </div>
               <div class="pagination-actions">
+                <form class="page-jump-control" @submit.prevent="jumpCampaignPage($event.target.elements.page.value)">
+                  <label>跳至<input name="page" type="number" min="1" :max="state.campaignPage.totalPages || 1" :value="state.campaignPage.page + 1" /></label>
+                  <button type="submit" :disabled="!state.campaignPage.totalPages">跳转</button>
+                </form>
                 <button type="button" :disabled="!state.campaignPage.hasPrevious" @click="changeCampaignPage(state.campaignPage.page - 1)">上一页</button>
                 <button type="button" :disabled="!state.campaignPage.hasNext" @click="changeCampaignPage(state.campaignPage.page + 1)">下一页</button>
               </div>
@@ -3117,7 +3346,7 @@ const App = {
             <div class="lifecycle-actions">
               <button class="primary-action lifecycle-advance" type="button" :disabled="isCampaignAdvanceDisabled()" :title="campaignAdvanceTitle()" @click="advanceCampaignStep">
                 <CheckCircle2 :size="17" />
-                确认并进入下一步：{{ campaignNextActionLabel }}
+                {{ campaignAdvanceButtonLabel }}
               </button>
             </div>
             <div v-if="state.selectedCampaign?.prePushRecords?.length" class="data-table compact-table prepush-table">
@@ -3219,6 +3448,75 @@ const App = {
                 <button class="primary-action" :disabled="state.loading">保存短链接配置</button>
               </div>
             </form>
+          </section>
+        </div>
+
+        <div v-if="state.testEmailDialogOpen" class="modal-backdrop" @click.self="closeTestEmailDialog">
+          <section class="modal-panel test-email-modal" role="dialog" aria-modal="true" aria-labelledby="test-email-title">
+            <div class="modal-header">
+              <div>
+                <h3 id="test-email-title">选择测试邮箱</h3>
+                <p>模拟发送只发送到测试邮箱，历史测试邮箱会按租户保存，可复用或删除。</p>
+              </div>
+              <button class="icon-action" type="button" title="关闭" @click="closeTestEmailDialog">
+                <X :size="16" />
+              </button>
+            </div>
+            <form class="test-email-add-row" @submit.prevent="addTestEmail">
+              <input v-model="state.newTestEmail" type="email" placeholder="qa@example.com" />
+              <button class="secondary-action compact" type="submit" :disabled="state.loading">
+                <Plus :size="16" />
+                新增测试邮箱
+              </button>
+            </form>
+            <div class="test-email-list">
+              <div v-if="!state.testEmails.length" class="empty-state compact-empty">暂无历史测试邮箱，请先新增一个测试邮箱</div>
+              <label v-for="item in state.testEmails" :key="item.id" class="test-email-row">
+                <input
+                  type="checkbox"
+                  :checked="isTestEmailSelected(item.email)"
+                  @change="toggleTestEmail(item.email)"
+                />
+                <span>{{ item.email }}</span>
+                <button class="icon-action danger" type="button" title="删除测试邮箱" :disabled="state.loading" @click.prevent="deleteTestEmail(item)">
+                  <Trash2 :size="15" />
+                </button>
+              </label>
+            </div>
+            <div v-if="state.selectedTestEmails.length" class="selected-test-email-tags">
+              <button v-for="email in state.selectedTestEmails" :key="email" type="button" @click="toggleTestEmail(email)">
+                {{ email }}
+                <X :size="13" />
+              </button>
+            </div>
+            <div class="modal-actions">
+              <button class="secondary-action" type="button" :disabled="state.loading" @click="closeTestEmailDialog">取消</button>
+              <button class="primary-action" type="button" :disabled="state.loading || !state.selectedTestEmails.length" @click="confirmTestSimulation">
+                <Send :size="17" />
+                模拟发送到测试邮箱
+              </button>
+            </div>
+          </section>
+        </div>
+
+        <div v-if="state.finalConfirmDialogOpen" class="modal-backdrop" @click.self="closeFinalConfirmDialog">
+          <section class="modal-panel final-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="final-confirm-title">
+            <div class="modal-header">
+              <div>
+                <h3 id="final-confirm-title">确认推送</h3>
+                <p>确认后将发送未推送完成的邮件记录，并按推送返回结果写入成功或失败状态。</p>
+              </div>
+              <button class="icon-action" type="button" title="关闭" @click="closeFinalConfirmDialog">
+                <X :size="16" />
+              </button>
+            </div>
+            <div class="modal-actions">
+              <button class="secondary-action" type="button" :disabled="state.loading" @click="closeFinalConfirmDialog">取消</button>
+              <button class="primary-action" type="button" :disabled="state.loading" @click="confirmFinalPush">
+                <CheckCircle2 :size="17" />
+                确认推送
+              </button>
+            </div>
           </section>
         </div>
 
@@ -3333,6 +3631,10 @@ const App = {
               </div>
               <div class="pagination">
                 <span>第 {{ state.trackingEventPage.page + 1 }} 页 / 共 {{ state.trackingEventPage.totalPages || 1 }} 页</span>
+                <form class="page-jump-control" @submit.prevent="jumpTrackingEventPage($event.target.elements.page.value)">
+                  <label>跳至<input name="page" type="number" min="1" :max="state.trackingEventPage.totalPages || 1" :value="state.trackingEventPage.page + 1" /></label>
+                  <button type="submit" :disabled="!state.trackingEventPage.totalPages">跳转</button>
+                </form>
                 <button type="button" :disabled="!state.trackingEventPage.hasPrevious" @click="changeTrackingEventPage(state.trackingEventPage.page - 1)">上一页</button>
                 <button type="button" :disabled="!state.trackingEventPage.hasNext" @click="changeTrackingEventPage(state.trackingEventPage.page + 1)">下一页</button>
               </div>
@@ -3369,6 +3671,10 @@ const App = {
             </div>
             <div class="pagination">
               <span>第 {{ state.trackingLinkPage.page + 1 }} 页 / 共 {{ state.trackingLinkPage.totalPages || 1 }} 页</span>
+              <form class="page-jump-control" @submit.prevent="jumpTrackingLinkPage($event.target.elements.page.value)">
+                <label>跳至<input name="page" type="number" min="1" :max="state.trackingLinkPage.totalPages || 1" :value="state.trackingLinkPage.page + 1" /></label>
+                <button type="submit" :disabled="!state.trackingLinkPage.totalPages">跳转</button>
+              </form>
               <button type="button" :disabled="!state.trackingLinkPage.hasPrevious" @click="changeTrackingLinkPage(state.trackingLinkPage.page - 1)">上一页</button>
               <button type="button" :disabled="!state.trackingLinkPage.hasNext" @click="changeTrackingLinkPage(state.trackingLinkPage.page + 1)">下一页</button>
             </div>

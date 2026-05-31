@@ -1,7 +1,16 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 
-const source = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8')
+function readSourceFiles(directoryUrl) {
+  return readdirSync(directoryUrl, { withFileTypes: true })
+    .flatMap((entry) => {
+      const entryUrl = new URL(`${entry.name}${entry.isDirectory() ? '/' : ''}`, directoryUrl)
+      if (entry.isDirectory()) return readSourceFiles(entryUrl)
+      return entry.name.endsWith('.js') ? [readFileSync(entryUrl, 'utf8')] : []
+    })
+}
+
+const source = readSourceFiles(new URL('../src/', import.meta.url)).join('\n')
 
 assert(
   !/catch\s*\{[\s\S]*state\.customers\s*=\s*demoCustomers/.test(source),
@@ -12,6 +21,14 @@ assert(
   /function changeCustomerPageSize\(size\) \{[\s\S]*loadCustomers\(0\)/.test(source) &&
     !/function changeCustomerPageSize\(size\) \{[\s\S]*nextSize === state\.customerPage\.size[\s\S]*loadCustomers\(0\)/.test(source),
   'customer page-size changes must immediately reload the first page'
+)
+
+assert(
+  /function extractApiErrorMessage\(response, text\)/.test(source) &&
+    /extractApiErrorMessage\(response, text\)/.test(source) &&
+    /JSON\.parse\(text\)/.test(source) &&
+    /parsed\.detail/.test(source),
+  'API request failures must prefer backend ProblemDetail.detail over generic HTTP or auth messages'
 )
 
 assert(
@@ -90,16 +107,26 @@ assert(
 assert(
   /CAMPAIGN_LIFECYCLE_STEPS/.test(source) &&
     /campaign-lifecycle-flow/.test(source) &&
-    /最终确认发送/.test(source),
+    /确认推送/.test(source),
   'mail campaign page must render a linear lifecycle flow for status management'
 )
 
 assert(
   /key: 'campaign-list'/.test(source) &&
     /state\.activeNav === 'campaign-list'/.test(source) &&
-    /function openCampaignDetail\(campaign\)[\s\S]*fillCampaignForm\(campaign\)[\s\S]*state\.activeNav = 'campaigns'/.test(source) &&
+    /function openCampaignDetail\(campaign\)[\s\S]*fillCampaignForm\(campaign\)[\s\S]*activateNav\('campaigns'\)/.test(source) &&
     !/<div class="campaign-list">/.test(source),
   'mail campaign list must be a standalone page with a jump action into the campaign detail editor'
+)
+
+assert(
+  /ACTIVE_NAV_STORAGE_KEY = 'lead_admin_active_nav'/.test(source) &&
+    /CUSTOMER_TOOL_STORAGE_KEY = 'lead_admin_customer_tool'/.test(source) &&
+    /activeNav: localStorage\.getItem\(ACTIVE_NAV_STORAGE_KEY\) \|\| 'dashboard'/.test(source) &&
+    /function activateNav\(nav\)[\s\S]*persistNavigationState\(\)/.test(source) &&
+    /function normalizeActiveNavAccess\(\)/.test(source) &&
+    /if \(state\.token\) \{[\s\S]*normalizeActiveNavAccess\(\)[\s\S]*refreshAll\(\)/.test(source),
+  'admin must restore the previous page after refresh and normalize inaccessible saved navigation'
 )
 
 assert(
@@ -109,7 +136,9 @@ assert(
 )
 
 assert(
-  /const CAMPAIGN_NEXT_ACTION_BY_STATUS[\s\S]*REVIEW_APPROVED: 'simulateSend'[\s\S]*SIMULATED: 'confirm'/.test(source) &&
+  /const CAMPAIGN_NEXT_ACTION_BY_STATUS[\s\S]*DRAFT: 'simulateSend'[\s\S]*SIMULATED: 'prePush'[\s\S]*PREVIEW_GENERATED: 'confirm'/.test(source) &&
+    !/review: '审核通过'/.test(source) &&
+    !/\/api\/campaigns\/\$\{campaignId\}\/review/.test(source) &&
     /rollback: index === currentIndex - 1/.test(source) &&
     /\/api\/campaigns\/\$\{state\.selectedCampaign\.id\}\/rollback/.test(source) &&
     /isCampaignStepDisabled\(step\)/.test(source) &&
@@ -120,15 +149,15 @@ assert(
 assert(
   /function campaignPrePushBlockReason\(\)[\s\S]*!state\.selectedCampaign\.channelId[\s\S]*请先保存活动配置以绑定推送通道/.test(source) &&
     /campaignNextAction\.value === 'prePush'[\s\S]*campaignPrePushBlockReason\(\)/.test(source) &&
-    /advanceCampaignStep\(\)[\s\S]*state\.error = reason/.test(source),
+    /advanceCampaignStep\([^)]*\)[\s\S]*state\.error = reason/.test(source),
   'mail campaign pre-push must require saved template, channel, and segment setup before calling the backend'
 )
 
 assert(
-  /function isCampaignAdvanceDisabled\(\)[\s\S]*if \(state\.selectedCampaign\?\.id\) return false[\s\S]*campaignNextAction\.value !== 'prePush'/.test(source) &&
+    /function isCampaignAdvanceDisabled\(\)[\s\S]*if \(state\.selectedCampaign\?\.id\) return false[\s\S]*campaignNextAction\.value !== 'simulateSend'/.test(source) &&
     /async function saveCampaignDraftForAdvance\(\)[\s\S]*\/api\/campaigns'[\s\S]*\/template`[\s\S]*\/tracking-link`[\s\S]*\/channel`[\s\S]*\/segments`/.test(source) &&
-    /advanceCampaignStep\(\)[\s\S]*const campaign = await saveCampaignDraftForAdvance\(\)[\s\S]*\/advance`/.test(source),
-  'mail campaign lifecycle advance must keep the draft-step button clickable and persist setup before generating pre-push'
+    /advanceCampaignStep\([^)]*\)[\s\S]*campaignNextAction\.value !== 'simulateSend'[\s\S]*const campaign = await saveCampaignDraftForAdvance\(\)[\s\S]*\/advance`/.test(source),
+  'mail campaign lifecycle advance must keep the draft-step button clickable and persist setup before simulation'
 )
 
 assert(
@@ -153,6 +182,28 @@ assert(
     /trackingShortCode/.test(source) &&
     /trackingUtmCampaign/.test(source),
   'mail campaign setup must save required campaign tracking short-link configuration'
+)
+
+assert(
+  /testEmailDialogOpen/.test(source) &&
+    /\/api\/campaigns\/test-emails/.test(source) &&
+    /deleteTestEmail/.test(source) &&
+    /testEmails: state\.selectedTestEmails/.test(source) &&
+    /campaignNextAction\.value === 'simulateSend' && !options\.confirmedTestEmails/.test(source) &&
+    /advanceCampaignStep\(\{ confirmedTestEmails: true \}\)/.test(source) &&
+    /选择测试邮箱/.test(source) &&
+    /模拟发送到测试邮箱/.test(source),
+  'mail campaign simulation must always open the persisted tenant test email dialog before advancing'
+)
+
+assert(
+  /finalConfirmDialogOpen/.test(source) &&
+    /campaignNextAction\.value === 'confirm' && !options\.confirmedFinalPush/.test(source) &&
+    /openFinalConfirmDialog\(\)/.test(source) &&
+    /async function confirmFinalPush\(\)[\s\S]*runCampaignAction\('confirm'/.test(source) &&
+    /确认后将发送未推送完成的邮件记录/.test(source) &&
+    /campaignAdvanceButtonLabel/.test(source),
+  'mail campaign final confirm must use a second confirmation dialog and call the direct confirm action'
 )
 
 assert(
