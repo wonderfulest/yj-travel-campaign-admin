@@ -1,5 +1,15 @@
 import type { Component } from 'vue'
 
+// ==================== 基础类型 ====================
+
+export type EmailQuality = 'PENDING' | 'VERIFIED' | 'BOUNCED' | 'MISSING'
+export type ContactStatus = 'NOT_CONTACTED' | 'CONTACTED' | 'UNSUBSCRIBED' | 'BOUNCED' | 'INVALID' | 'READY_TO_VERIFY'
+export type CampaignStatus = 'DRAFT' | 'CONFIGURED' | 'SIMULATED' | 'PREVIEW_GENERATED' | 'CONFIRMED'
+export type UserRole = 'TENANT_OWNER' | 'TENANT_ADMIN' | 'TENANT_USER'
+export type ChannelType = 'smtp' | 'aws-ses'
+export type CustomerTool = 'list' | 'import' | 'mapping'
+export type AuthMode = 'login' | 'register'
+
 export interface TemplateVariable {
   key: string
   label: string
@@ -11,6 +21,9 @@ export interface NavItem {
   key: string
   label: string
   icon: Component
+  title?: string
+  description?: string
+  parentKey?: string
 }
 
 export interface NavChildItem {
@@ -23,6 +36,7 @@ export interface StatCard {
   value: string | number
   icon: Component
   target: string
+  tool?: string
 }
 
 export interface DonutSegment {
@@ -52,5 +66,342 @@ export interface ReadinessBar {
   reachableShare: string
   reachableMemberCount: number
   memberCount: number
+}
+
+// ==================== 分页类型 ====================
+
+export interface PageResult<T> {
+  items: T[]
+  page: number
+  size: number
+  totalItems: number
+  totalPages: number
+  hasNext: boolean
+  hasPrevious: boolean
+}
+
+// ==================== 用户相关 ====================
+
+export interface User {
+  email: string
+  tenantId: string | number
+  userId: string | number
+  roles: UserRole[]
+}
+
+export interface AuthForm {
+  tenantName: string
+  displayName: string
+  email: string
+  password: string
+}
+
+export interface LoginResult {
+  accessToken: string
+  email: string
+  tenantId: string | number
+  userId: string | number
+  roles?: UserRole[]
+}
+
+// ==================== 客户资产 ====================
+
+export interface Customer {
+  id: string
+  name: string
+  country: string
+  city: string
+  email: string
+  website: string
+  phone: string
+  emailQuality: EmailQuality
+  contactStatus: ContactStatus
+  sourcePrimary: string
+  longitude?: number
+  latitude?: number
+  postcode?: string
+  street?: string
+  houseNumber?: string
+  businessScope?: string
+}
+
+export interface CustomerProfile {
+  asset: Customer
+  businessScope: string
+  travelProfile: unknown | null
+  destinations: unknown[]
+  languages: unknown[]
+  sources: unknown[]
+}
+
+export interface CustomerSummary {
+  totalCustomers: number
+  customersWithEmail: number
+  pendingEmailCustomers: number
+  verifiedEmailCustomers: number
+  missingEmailCustomers: number
+  reachableCustomers: number
+  unreachableCustomers: number
+  customersByCountry: Array<{ country: string; customers: number }>
+  customersByEmailQuality: SummaryStatItem[]
+  customersByContactStatus: SummaryStatItem[]
+}
+
+export interface CustomerEditForm {
+  name: string
+  country: string
+  city: string
+  postcode: string
+  street: string
+  houseNumber: string
+  website: string
+  phone: string
+  email: string
+  emailQuality: EmailQuality
+  contactStatus: ContactStatus
+  businessScope: string
+}
+
+// ==================== 推送通道 ====================
+
+export interface Channel {
+  id: string | number
+  name: string
+  type: ChannelType
+  fromEmail: string
+  fromName: string
+  replyTo?: string
+  smtpHost?: string
+  smtpPort?: number
+  smtpEncryption?: string
+  smtpUsername?: string
+  awsRegion?: string
+  awsAccessKeyId?: string
+}
+
+export interface SmtpForm {
+  name: string
+  smtpHost: string
+  smtpPort: number
+  smtpEncryption: string
+  smtpUsername: string
+  smtpPassword: string
+  fromEmail: string
+  fromName: string
+  replyTo: string
+}
+
+export interface AwsSesForm {
+  name: string
+  fromEmail: string
+  fromName: string
+  replyTo: string
+  awsRegion: string
+  awsAccessKeyId: string
+  awsSecretAccessKey: string
+}
+
+// ==================== 客群管理 ====================
+
+export interface SegmentRuleCondition {
+  field: string
+  op: string
+  values: string[]
+  _valueText?: string
+  _countryValues?: string[]
+}
+
+export interface SegmentRule {
+  logic: 'AND' | 'OR'
+  conditions: Array<{
+    field: string
+    op: string
+    values: string[]
+  }>
+}
+
+export interface Segment {
+  id: string | number
+  name: string
+  description: string
+  rules?: SegmentRule
+  memberCount?: number
+}
+
+export interface SegmentForm {
+  id: string | number
+  name: string
+  description: string
+  rules: SegmentRuleCondition[]
+}
+
+export interface SegmentSummary {
+  segmentCount: number
+  memberCount: number
+  uniqueCustomerCount: number
+  reachableMemberCount: number
+  topSegments: Array<{
+    segmentId: string | number
+    segmentName: string
+    memberCount: number
+    reachableMemberCount: number
+  }>
+}
+
+export interface SegmentRefreshResult {
+  matchedCount: number
+}
+
+// ==================== 邮件活动 ====================
+
+export interface TrackingLink {
+  targetUrl: string
+  shortCode: string
+  utmSource: string
+  utmMedium: string
+  utmCampaign: string
+  utmContent: string
+  utmTerm: string
+}
+
+export interface CampaignTemplate {
+  subject: string
+  fromName: string
+  htmlBody: string
+  body?: string
+  variablesJson?: string
+}
+
+export interface Campaign {
+  id: string | number
+  name: string
+  objective: string
+  status: CampaignStatus
+  channelId?: string | number
+  segmentIds?: (string | number)[]
+  template?: CampaignTemplate
+  trackingLink?: TrackingLink
+}
+
+export interface CampaignForm {
+  name: string
+  objective: string
+  subject: string
+  fromName: string
+  htmlBody: string
+  templateVariables: TemplateVariable[]
+  trackingTargetUrl: string
+  trackingShortCode: string
+  trackingUtmSource: string
+  trackingUtmMedium: string
+  trackingUtmCampaign: string
+  trackingUtmContent: string
+  trackingUtmTerm: string
+  channelId: string | number | ''
+  segmentIds: (string | number)[]
+}
+
+// ==================== 测试邮箱 ====================
+
+export interface TestEmail {
+  id: string | number
+  email: string
+}
+
+// ==================== 短链统计 ====================
+
+export interface TrackingSummary {
+  totalClicks: number
+  clickedCustomers: number
+  shortLinks: number
+  clickRate: number
+}
+
+export interface TrackingTimeseriesPoint {
+  date: string
+  clicks: number
+}
+
+export interface TrackingUtmStat {
+  utmSource: string
+  utmMedium: string
+  utmCampaign: string
+  clicks: number
+}
+
+export interface TrackingLinkStat {
+  shortCode: string
+  targetUrl: string
+  clicks: number
+}
+
+export interface TrackingEvent {
+  id: string
+  customerId: string
+  campaignId: string
+  shortCode: string
+  clickedAt: string
+  ipAddress?: string
+  userAgent?: string
+  utmSource?: string
+  utmMedium?: string
+  utmCampaign?: string
+  utmContent?: string
+  utmTerm?: string
+}
+
+export interface TrackingFilter {
+  campaignId: string
+}
+
+// ==================== Mapping/导入 ====================
+
+export interface MappingPreview {
+  unmappedCount: number
+  previewItems?: unknown[]
+}
+
+export interface MappingResult {
+  mappedCount: number
+  createdCount: number
+  updatedCount: number
+}
+
+export interface ImportResult {
+  importedCount: number
+  errors?: string[]
+}
+
+// ==================== 字典数据 ====================
+
+export interface LocalizedName {
+  en_us?: string
+  zh_cn?: string
+  'zh-CN'?: string
+  zh?: string
+  en?: string
+  [key: string]: string | undefined
+}
+
+export interface Country {
+  id: string
+  alpha3: string
+  name: LocalizedName
+  languages: string[]
+}
+
+export interface City {
+  id: string
+  name: LocalizedName
+  fullName: LocalizedName
+  timezone: string
+  country: Country | null
+}
+
+export interface DictionaryState {
+  countries: Country[]
+  citiesCache: Record<string, City[]>
+  loading: boolean
+  error: string
 }
 

@@ -1,4 +1,44 @@
-import { computed, nextTick, reactive } from 'vue'
+import { computed, nextTick } from 'vue'
+import { createPinia, defineStore, setActivePinia } from 'pinia'
+import type {
+  AuthForm,
+  AuthMode,
+  Campaign,
+  CampaignForm,
+  CampaignStatus,
+  Channel,
+  City,
+  ContactStatus,
+  Country,
+  Customer,
+  CustomerEditForm,
+  CustomerProfile,
+  CustomerSummary,
+  DictionaryState,
+  EmailQuality,
+  ImportResult,
+  MappingPreview,
+  MappingResult,
+  PageResult,
+  Segment,
+  SegmentForm,
+  SegmentRefreshResult,
+  SegmentRule,
+  SegmentRuleCondition,
+  SegmentSummary,
+  SmtpForm,
+  AwsSesForm,
+  SummaryStatItem,
+  TestEmail,
+  TrackingEvent,
+  TrackingFilter,
+  TrackingLinkStat,
+  TrackingSummary,
+  TrackingTimeseriesPoint,
+  TrackingUtmStat,
+  User,
+  UserRole
+} from '../types.ts'
 import {
   BarChart3,
   CheckCircle2,
@@ -49,6 +89,8 @@ import {
   templateVariablesToJson
 } from '../utils/templateVariables.ts'
 
+setActivePinia(createPinia())
+
 export const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
 export const REQUIRED_TRACKING_LINK_PARAM = 'trackingLink'
 export const REQUIRED_TRACKING_LINK_MESSAGE = 'HTML 模板必须包含短链参数 ${trackingLink}'
@@ -59,51 +101,6 @@ export const DEFAULT_TEMPLATE_VARIABLES = [
 ]
 export const EMPTY_TEMPLATE_PREVIEW_HTML = '<!doctype html><html><body style="font-family:Arial,sans-serif;color:#667;margin:24px;">暂无可预览的邮件模板</body></html>'
 
-export const demoCustomers = [
-  {
-    id: 'demo-1',
-    name: 'Reisen Scala',
-    country: 'DE',
-    city: 'Berlin',
-    email: 'info@scala-bts.de',
-    website: 'http://www.scala-bts.de/',
-    phone: '+49 30 89048330',
-    emailQuality: 'PENDING',
-    contactStatus: 'NOT_CONTACTED',
-    sourcePrimary: 'OSM',
-    longitude: 13.2934005,
-    latitude: 52.497262
-  },
-  {
-    id: 'demo-2',
-    name: 'Günther und Bergmann',
-    country: 'DE',
-    city: 'Kleve',
-    email: 'info@ihre-reisepartner.de',
-    website: 'https://www.ihre-reiseplaner.de/',
-    phone: '+49 2821 99797 0',
-    emailQuality: 'PENDING',
-    contactStatus: 'NOT_CONTACTED',
-    sourcePrimary: 'OSM',
-    longitude: 6.1359833,
-    latitude: 51.7863806
-  },
-  {
-    id: 'demo-3',
-    name: 'Nordic City Travel',
-    country: 'DK',
-    city: 'Copenhagen',
-    email: '',
-    website: 'https://nordic.example',
-    phone: '+45 11 22 33 44',
-    emailQuality: 'MISSING',
-    contactStatus: 'NOT_CONTACTED',
-    sourcePrimary: 'OSM',
-    longitude: 12.5683,
-    latitude: 55.6761
-  }
-]
-
 export function initialAdminNav() {
   const queryNav = new URLSearchParams(window.location.search).get(ADMIN_NAV_QUERY_KEY)
   const routeState = resolveNavigationFromLocation(window.location.pathname, queryNav)
@@ -112,179 +109,183 @@ export function initialAdminNav() {
   return resolveNavigationFromLocation('/', storedNav).nav
 }
 
-export const state = reactive({
-  token: localStorage.getItem('travel_admin_token') || '',
-  user: JSON.parse(localStorage.getItem('travel_admin_user') || 'null'),
-  authMode: 'login',
-  authForm: {
-    tenantName: 'Youjie Tech',
-    displayName: 'Owner',
-    email: 'owner@example.com',
-    password: 'secret123'
-  },
-  activeNav: initialAdminNav(),
-  sidebarCollapsed: localStorage.getItem('travel_admin_sidebar_collapsed') === 'true',
-  loading: false,
-  error: '',
-  notice: '',
-  customers: stateTokenIsDemo() ? demoCustomers : [],
-  customerSummary: stateTokenIsDemo() ? summarizeCustomers(demoCustomers) : null,
-  customerPage: {
-    page: 0,
-    size: 20,
-    totalItems: stateTokenIsDemo() ? demoCustomers.length : 0,
-    totalPages: stateTokenIsDemo() ? 1 : 0,
-    hasNext: false,
-    hasPrevious: false
-  },
-  channels: [],
-  channelPage: {
-    page: 0,
-    size: 20,
-    totalItems: 0,
-    totalPages: 0,
-    hasNext: false,
-    hasPrevious: false
-  },
-  segments: [],
-  segmentSummary: stateTokenIsDemo() ? summarizeSegments([], demoCustomers) : null,
-  segmentPage: {
-    page: 0,
-    size: 20,
-    totalItems: 0,
-    totalPages: 0,
-    hasNext: false,
-    hasPrevious: false
-  },
-  segmentMembers: [],
-  segmentMemberPage: {
-    page: 0,
-    size: 20,
-    totalItems: 0,
-    totalPages: 0,
-    hasNext: false,
-    hasPrevious: false
-  },
-  selectedSegment: null,
-  segmentForm: {
-    id: '',
-    name: '',
-    description: '',
-    rules: []
-  },
-  segmentRefreshResult: null,
-  campaigns: [],
-  campaignPage: {
-    page: 0,
-    size: 20,
-    totalItems: 0,
-    totalPages: 0,
-    hasNext: false,
-    hasPrevious: false
-  },
-  trackingSummary: {
-    totalClicks: 0,
-    clickedCustomers: 0,
-    shortLinks: 0,
-    clickRate: 0
-  },
-  trackingTimeseries: [],
-  trackingUtmStats: [],
-  trackingLinkStats: [],
-  trackingLinkPage: {
-    page: 0,
-    size: 20,
-    totalItems: 0,
-    totalPages: 0,
-    hasNext: false,
-    hasPrevious: false
-  },
-  trackingEvents: [],
-  trackingEventPage: {
-    page: 0,
-    size: 20,
-    totalItems: 0,
-    totalPages: 0,
-    hasNext: false,
-    hasPrevious: false
-  },
-  trackingFilter: {
-    campaignId: ''
-  },
-  selectedCampaign: null,
-  campaignForm: {
-    name: '先锋中国行程推广邮件',
-    objective: '向海外旅行社推广 9 天 8 晚中国文化线路',
-    subject: 'China Discovery from US$399+ for ${customerName}',
-    fromName: 'Youjie Travel Partnerships',
-    htmlBody: pioneerChinaEmailTemplate,
-    templateVariables: cloneTemplateVariables(DEFAULT_TEMPLATE_VARIABLES),
-    trackingTargetUrl: 'https://www.example.com/travel-agency-partnership',
-    trackingShortCode: 'china-trip',
-    trackingUtmSource: 'email',
-    trackingUtmMedium: 'email',
-    trackingUtmCampaign: '1780118309231001',
-    trackingUtmContent: 'template_a',
-    trackingUtmTerm: '',
-    channelId: '',
-    segmentIds: []
-  },
-  trackingLinkDialogOpen: false,
-  finalConfirmDialogOpen: false,
-  testEmailDialogOpen: false,
-  testEmails: [],
-  selectedTestEmails: [],
-  newTestEmail: '',
-  segmentDropdownOpen: false,
-  segmentDropdownQuery: '',
-  templatePreviewHtml: '',
-  templatePreviewSubject: '',
-  templatePreviewError: '',
-  templatePreviewLoading: false,
-  mappingPreview: null,
-  mappingResult: null,
-  customerTool: CUSTOMER_TOOLS.has(localStorage.getItem(CUSTOMER_TOOL_STORAGE_KEY))
-    ? localStorage.getItem(CUSTOMER_TOOL_STORAGE_KEY)
-    : 'list',
-  channelType: 'smtp',
-  smtpForm: {
-    name: 'SMTP Gmail',
-    smtpHost: 'smtp.gmail.com',
-    smtpPort: 465,
-    smtpEncryption: 'SSL',
-    smtpUsername: '',
-    smtpPassword: '',
-    fromEmail: 'noreply@example.com',
-    fromName: 'Youjie Tech',
-    replyTo: 'reply@example.com'
-  },
-  awsSesForm: {
-    name: 'SES Frankfurt',
-    fromEmail: 'noreply@example.com',
-    fromName: 'Youjie Tech',
-    replyTo: 'reply@example.com',
-    awsRegion: 'eu-central-1',
-    awsAccessKeyId: '',
-    awsSecretAccessKey: ''
-  },
-  importFile: null,
-  importResult: null,
-  filter: '',
-  selectedCustomer: null,
-  customerProfile: null,
-  customerProfileLoading: false,
-  customerCreateMode: false,
-  customerEditMode: false,
-  customerEditorKeepSelection: false,
-  customerEditForm: {},
-  customerHelpVisible: true,
-  dictionary: {
-    countries: [],
-    citiesCache: {},
+export const useAdminStore = defineStore('admin', {
+  state: () => ({
+    token: localStorage.getItem('travel_admin_token') || '',
+    user: JSON.parse(localStorage.getItem('travel_admin_user') || 'null') as User | null,
+    authMode: 'login' as AuthMode,
+    authForm: {
+      tenantName: 'Youjie Tech',
+      displayName: 'Owner',
+      email: 'owner@example.com',
+      password: 'secret123'
+    } as AuthForm,
+    activeNav: initialAdminNav(),
+    sidebarCollapsed: localStorage.getItem('travel_admin_sidebar_collapsed') === 'true',
     loading: false,
-    error: ''
-  }
+    error: '',
+    notice: '',
+    customers: [] as Customer[],
+    customerSummary: null as CustomerSummary | null,
+    customerPage: {
+      page: 0,
+      size: 20,
+      totalItems: 0,
+      totalPages: 0,
+      hasNext: false,
+      hasPrevious: false
+    },
+    channels: [] as Channel[],
+    channelPage: {
+      page: 0,
+      size: 20,
+      totalItems: 0,
+      totalPages: 0,
+      hasNext: false,
+      hasPrevious: false
+    },
+    segments: [] as Segment[],
+    segmentSummary: null as SegmentSummary | null,
+    segmentPage: {
+      page: 0,
+      size: 20,
+      totalItems: 0,
+      totalPages: 0,
+      hasNext: false,
+      hasPrevious: false
+    },
+    segmentMembers: [] as Customer[],
+    segmentMemberPage: {
+      page: 0,
+      size: 20,
+      totalItems: 0,
+      totalPages: 0,
+      hasNext: false,
+      hasPrevious: false
+    },
+    selectedSegment: null as Segment | null,
+    segmentForm: {
+      id: '',
+      name: '',
+      description: '',
+      rules: [] as SegmentRuleCondition[]
+    } as SegmentForm,
+    segmentRefreshResult: null as SegmentRefreshResult | null,
+    campaigns: [] as Campaign[],
+    campaignPage: {
+      page: 0,
+      size: 20,
+      totalItems: 0,
+      totalPages: 0,
+      hasNext: false,
+      hasPrevious: false
+    },
+    trackingSummary: {
+      totalClicks: 0,
+      clickedCustomers: 0,
+      shortLinks: 0,
+      clickRate: 0
+    } as TrackingSummary,
+    trackingTimeseries: [] as TrackingTimeseriesPoint[],
+    trackingUtmStats: [] as TrackingUtmStat[],
+    trackingLinkStats: [] as TrackingLinkStat[],
+    trackingLinkPage: {
+      page: 0,
+      size: 20,
+      totalItems: 0,
+      totalPages: 0,
+      hasNext: false,
+      hasPrevious: false
+    },
+    trackingEvents: [] as TrackingEvent[],
+    trackingEventPage: {
+      page: 0,
+      size: 20,
+      totalItems: 0,
+      totalPages: 0,
+      hasNext: false,
+      hasPrevious: false
+    },
+    trackingFilter: {
+      campaignId: ''
+    } as TrackingFilter,
+    selectedCampaign: null as Campaign | null,
+    campaignForm: {
+      name: '先锋中国行程推广邮件',
+      objective: '向海外旅行社推广 9 天 8 晚中国文化线路',
+      subject: 'China Discovery from US$399+ for ${customerName}',
+      fromName: 'Youjie Travel Partnerships',
+      htmlBody: pioneerChinaEmailTemplate,
+      templateVariables: cloneTemplateVariables(DEFAULT_TEMPLATE_VARIABLES),
+      trackingTargetUrl: 'https://www.example.com/travel-agency-partnership',
+      trackingShortCode: 'china-trip',
+      trackingUtmSource: 'email',
+      trackingUtmMedium: 'email',
+      trackingUtmCampaign: '1780118309231001',
+      trackingUtmContent: 'template_a',
+      trackingUtmTerm: '',
+      channelId: '',
+      segmentIds: [] as (string | number)[]
+    } as CampaignForm,
+    trackingLinkDialogOpen: false,
+    finalConfirmDialogOpen: false,
+    testEmailDialogOpen: false,
+    testEmails: [] as TestEmail[],
+    selectedTestEmails: [] as string[],
+    newTestEmail: '',
+    segmentDropdownOpen: false,
+    segmentDropdownQuery: '',
+    templatePreviewHtml: '',
+    templatePreviewSubject: '',
+    templatePreviewError: '',
+    templatePreviewLoading: false,
+    mappingPreview: null as MappingPreview | null,
+    mappingResult: null as MappingResult | null,
+    customerTool: CUSTOMER_TOOLS.has(localStorage.getItem(CUSTOMER_TOOL_STORAGE_KEY))
+      ? localStorage.getItem(CUSTOMER_TOOL_STORAGE_KEY) as 'list' | 'import' | 'mapping'
+      : 'list',
+    channelType: 'smtp' as 'smtp' | 'aws-ses',
+    smtpForm: {
+      name: 'SMTP Gmail',
+      smtpHost: 'smtp.gmail.com',
+      smtpPort: 465,
+      smtpEncryption: 'SSL',
+      smtpUsername: '',
+      smtpPassword: '',
+      fromEmail: 'noreply@example.com',
+      fromName: 'Youjie Tech',
+      replyTo: 'reply@example.com'
+    } as SmtpForm,
+    awsSesForm: {
+      name: 'SES Frankfurt',
+      fromEmail: 'noreply@example.com',
+      fromName: 'Youjie Tech',
+      replyTo: 'reply@example.com',
+      awsRegion: 'eu-central-1',
+      awsAccessKeyId: '',
+      awsSecretAccessKey: ''
+    } as AwsSesForm,
+    importFile: null as File | null,
+    importResult: null as ImportResult | null,
+    filter: '',
+    selectedCustomer: null as Customer | null,
+    customerProfile: null as CustomerProfile | null,
+    customerProfileLoading: false,
+    customerCreateMode: false,
+    customerEditMode: false,
+    customerEditorKeepSelection: false,
+    customerEditForm: {} as CustomerEditForm,
+    customerHelpVisible: true,
+    dictionary: {
+      countries: [] as Country[],
+      citiesCache: {} as Record<string, City[]>,
+      loading: false,
+      error: ''
+    } as DictionaryState
+  })
 })
+
+export const state = useAdminStore()
 export const request = createApiRequest(() => state.token)
 
 export const isLoggedIn = computed(() => Boolean(state.token))
@@ -390,12 +391,12 @@ export const CAMPAIGN_ACTION_LABELS = {
   confirm: '确认推送'
 }
 
-export function currentRoles() {
-  return state.user?.roles?.length ? state.user.roles : ['TENANT_OWNER']
+export function currentRoles(): UserRole[] {
+  return state.user?.roles?.length ? state.user.roles as UserRole[] : ['TENANT_OWNER']
 }
 
-export function canAccessNav(nav) {
-  return currentRoles().some((role) => ROLE_PAGE_ACCESS[role]?.includes(nav))
+export function canAccessNav(nav: string): boolean {
+  return currentRoles().some((role) => ROLE_PAGE_ACCESS[role as keyof typeof ROLE_PAGE_ACCESS]?.includes(nav))
 }
 
 export const availableNavItems = computed(() => navItems.filter((item) => canAccessNav(item.key)))
@@ -517,13 +518,13 @@ export const segmentReadinessBars = computed(() => {
   })
 })
 
-export function campaignLifecycleIndex(status) {
+export function campaignLifecycleIndex(status: CampaignStatus): number {
   const index = CAMPAIGN_LIFECYCLE_STEPS.findIndex((step) => step.status === status)
   return index >= 0 ? index : 0
 }
 
-export function campaignActionLabel(action) {
-  return CAMPAIGN_ACTION_LABELS[action] || action
+export function campaignActionLabel(action: string): string {
+  return CAMPAIGN_ACTION_LABELS[action as keyof typeof CAMPAIGN_ACTION_LABELS] || action
 }
 
 export function campaignPrePushBlockReason() {
@@ -589,11 +590,11 @@ export function campaignStepTitle(step) {
   return '只能回退到上一步或确认进入下一步'
 }
 
-export function normalizedIdList(ids) {
+export function normalizedIdList(ids: (string | number)[] | undefined): string {
   return [...(ids || [])].map(String).sort().join('|')
 }
 
-export function normalizedTemplateVariables(variables) {
+export function normalizedTemplateVariables(variables: { key?: string; label?: string; sampleValue?: string; required?: boolean }[] | undefined): string {
   return JSON.stringify((variables || []).map((variable) => ({
     key: String(variable.key || '').trim(),
     label: String(variable.label || '').trim(),
@@ -607,13 +608,13 @@ export function persistNavigationState() {
   localStorage.setItem(CUSTOMER_TOOL_STORAGE_KEY, state.customerTool)
 }
 
-export function activateNav(nav) {
+export function activateNav(nav: string): void {
   state.activeNav = nav
   persistNavigationState()
   void router.push(navToPath(nav, state.customerTool)).catch(() => {})
 }
 
-export function setCustomerToolState(tool) {
+export function setCustomerToolState(tool: string): void {
   state.customerTool = normalizeCustomerTool(tool)
   persistNavigationState()
 }
@@ -635,7 +636,7 @@ export function normalizeActiveNavAccess() {
   }
 }
 
-export function setActiveNav(nav) {
+export function setActiveNav(nav: string): void {
   if (!canAccessNav(nav)) {
     state.error = '当前角色没有访问该页面的权限'
     activateNav(availableNavItems.value[0]?.key || 'dashboard')
@@ -657,27 +658,27 @@ export function setActiveNav(nav) {
   }
 }
 
-export function navChildItems(parentKey) {
+export function navChildItems(parentKey: string) {
   return availableNavItems.value.filter((item) => item.parentKey === parentKey)
 }
 
-export function isNavItemActive(item) {
+export function isNavItemActive(item: { key: string }): boolean {
   if (state.activeNav === item.key) return true
   return navChildItems(item.key).some((child) => child.key === state.activeNav)
 }
 
-export function toggleSidebar() {
+export function toggleSidebar(): void {
   state.sidebarCollapsed = !state.sidebarCollapsed
   localStorage.setItem('travel_admin_sidebar_collapsed', String(state.sidebarCollapsed))
 }
 
-export function syncNavigationFromRoute(pathname, queryNav = '') {
+export function syncNavigationFromRoute(pathname: string, queryNav = ''): void {
   const { nav, customerTool } = resolveNavigationFromLocation(pathname, queryNav)
   state.activeNav = nav
   state.customerTool = normalizeCustomerTool(customerTool)
 }
 
-export function openStatTarget(item) {
+export function openStatTarget(item: { target: string; tool?: string }): void {
   if (item.target === 'customers' && item.tool) {
     setCustomerTool(item.tool)
     return
@@ -685,31 +686,53 @@ export function openStatTarget(item) {
   setActiveNav(item.target)
 }
 
-export function normalizedWebsiteUrl(website) {
+export function normalizedWebsiteUrl(website: string | undefined): string {
   const value = String(website || '').trim()
   if (!value) return ''
   return /^https?:\/\//i.test(value) ? value : `https://${value}`
 }
 
-export function formatWebsiteLabel(website) {
+export function formatWebsiteLabel(website: string | undefined): string {
   return String(website || '')
     .trim()
     .replace(/^https?:\/\//i, '')
     .replace(/\/$/, '')
 }
 
-export function displayValue(value) {
+export function displayValue<T>(value: T): T | '-' {
   if (value === null || value === undefined || value === '') return '-'
   return value
 }
 
-export function percentValue(value) {
+export function percentValue(value: number | string | undefined): string {
   return `${Math.round(Number(value || 0) * 100)}%`
 }
 
 export const CHART_PALETTE = ['#0f766e', '#2563eb', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#64748b', '#0ea5e9']
 
-export function buildDonut(items) {
+export interface DonutItem {
+  label: string
+  value: number
+  color?: string
+}
+
+export interface DonutSegment {
+  label: string
+  value: number
+  percent: number
+  color: string
+  dashArray: string
+  dashOffset: number
+}
+
+export interface DonutChart {
+  radius: number
+  circumference: number
+  total: number
+  segments: DonutSegment[]
+}
+
+export function buildDonut(items: DonutItem[]): DonutChart {
   const data = (items || []).filter((item) => Number(item.value) > 0)
   const total = data.reduce((sum, item) => sum + Number(item.value || 0), 0)
   const radius = 52
@@ -719,7 +742,7 @@ export function buildDonut(items) {
     const value = Number(item.value || 0)
     const fraction = total ? value / total : 0
     const length = fraction * circumference
-    const segment = {
+    const segment: DonutSegment = {
       label: item.label,
       value,
       percent: Math.round(fraction * 100),
@@ -733,8 +756,8 @@ export function buildDonut(items) {
   return { radius, circumference, total, segments }
 }
 
-export function statusLabel(status) {
-  const labels = {
+export function statusLabel(status: string): string {
+  const labels: Record<string, string> = {
     PENDING: '待验证',
     VERIFIED: '已验证',
     BOUNCED: '退信',
@@ -749,28 +772,35 @@ export function statusLabel(status) {
   return labels[status] || status || '未知'
 }
 
-export function jsonObject(value) {
+export function jsonObject(value: unknown): unknown {
   if (!value) return null
   if (typeof value === 'object') return value
   try {
-    return JSON.parse(value)
+    return JSON.parse(String(value))
   } catch {
     return null
   }
 }
 
-export function localizedName(value) {
-  const parsed = jsonObject(value)
-  if (!parsed) return displayValue(value)
+export function localizedName(value: unknown): string {
+  const parsed = jsonObject(value) as Record<string, string> | null
+  if (!parsed) return displayValue(value) as string
   return parsed.zh || parsed['zh-CN'] || parsed.en || Object.values(parsed).find(Boolean) || '-'
 }
 
-export function formatLanguages(languages) {
+export function formatLanguages(languages: unknown[]): string {
   if (!languages?.length) return '-'
   return languages.map((item) => localizedName(item)).filter((item) => item && item !== '-').join('、') || '-'
 }
 
-export function destinationLabel(destination) {
+interface Destination {
+  country?: { id: string; name: unknown }
+  city?: { name: unknown; country?: { id: string } }
+  worldRegion?: { name: unknown }
+  iataAirport?: { id: string; name: unknown }
+}
+
+export function destinationLabel(destination: Destination | null | undefined): string {
   if (!destination) return '-'
   if (destination.country) return `${destination.country.id} ${localizedName(destination.country.name)}`
   if (destination.city) return `${localizedName(destination.city.name)}${destination.city.country?.id ? ` / ${destination.city.country.id}` : ''}`
@@ -779,17 +809,17 @@ export function destinationLabel(destination) {
   return '-'
 }
 
-export function profileAsset() {
-  return state.customerProfile?.asset || state.selectedCustomer || {}
+export function profileAsset(): Customer {
+  return state.customerProfile?.asset || state.selectedCustomer || ({} as Customer)
 }
 
-export function formatCountryShare(customers) {
+export function formatCountryShare(customers: number): string {
   const total = Number((state.customerSummary || summarizeCustomers(state.customers)).totalCustomers || 0)
   if (!total) return '0%'
   return `${Math.round((Number(customers || 0) / total) * 100)}%`
 }
 
-async function copyShortLink(url) {
+async function copyShortLink(url: string): Promise<void> {
   if (!url) return
   try {
     await navigator.clipboard?.writeText(url)
@@ -799,22 +829,28 @@ async function copyShortLink(url) {
   }
 }
 
-async function openCustomerDetail(customer) {
+export async function openCustomerDetail(customer: Customer): Promise<void> {
   state.selectedCustomer = customer
   state.customerProfile = null
   state.customerEditorKeepSelection = false
-  resetCustomerEditorState()
+  state.customerCreateMode = false
+  state.customerEditMode = false
+  state.customerEditForm = buildCustomerEditForm(customer)
   await loadCustomerProfile(customer)
 }
 
-export function closeCustomerDetail() {
+export function closeCustomerDetail(): void {
+  closeCustomerDialog()
+}
+
+export function closeCustomerDialog(): void {
   state.selectedCustomer = null
   state.customerProfile = null
   state.customerEditorKeepSelection = false
   resetCustomerEditorState()
 }
 
-export function closeCustomerEditor() {
+export function closeCustomerEditor(): void {
   if (!state.customerEditorKeepSelection) {
     state.selectedCustomer = null
     state.customerProfile = null
@@ -823,14 +859,14 @@ export function closeCustomerEditor() {
   resetCustomerEditorState()
 }
 
-export function resetCustomerEditorState() {
+export function resetCustomerEditorState(): void {
   state.customerCreateMode = false
   state.customerEditMode = false
   state.customerEditorKeepSelection = false
-  state.customerEditForm = {}
+  state.customerEditForm = {} as CustomerEditForm
 }
 
-export function defaultCustomerForm() {
+export function defaultCustomerForm(): CustomerEditForm {
   return {
     name: '',
     country: '',
@@ -847,7 +883,7 @@ export function defaultCustomerForm() {
   }
 }
 
-export function openCustomerCreate() {
+export function openCustomerCreate(): void {
   state.selectedCustomer = null
   state.customerProfile = null
   state.customerCreateMode = true
@@ -856,14 +892,22 @@ export function openCustomerCreate() {
   state.customerEditForm = defaultCustomerForm()
 }
 
-export function openCustomerEdit(customer) {
+export async function openCustomerEdit(customer?: Customer): Promise<void> {
   const asset = customer || profileAsset()
   const keepSelection = Boolean(state.selectedCustomer && !state.customerCreateMode && !state.customerEditMode)
   state.selectedCustomer = asset
+  state.customerProfile = null
   state.customerCreateMode = false
   state.customerEditMode = true
   state.customerEditorKeepSelection = keepSelection
-  state.customerEditForm = {
+  state.customerEditForm = buildCustomerEditForm(asset)
+  if (asset?.id) {
+    await loadCustomerProfile(asset)
+  }
+}
+
+export function buildCustomerEditForm(asset: Partial<Customer> = {}): CustomerEditForm {
+  return {
     name: asset.name || '',
     country: asset.country || '',
     city: asset.city || '',
@@ -873,33 +917,22 @@ export function openCustomerEdit(customer) {
     website: asset.website || '',
     phone: asset.phone || '',
     email: asset.email || '',
-    emailQuality: asset.emailQuality || 'PENDING',
-    contactStatus: asset.contactStatus || 'NOT_CONTACTED',
+    emailQuality: (asset.emailQuality as EmailQuality) || 'PENDING',
+    contactStatus: (asset.contactStatus as ContactStatus) || 'NOT_CONTACTED',
     businessScope: asset.businessScope || state.customerProfile?.businessScope || ''
   }
 }
 
-async function loadCustomerProfile(customer = state.selectedCustomer) {
+async function loadCustomerProfile(customer: Customer | null = state.selectedCustomer): Promise<void> {
   if (!customer?.id) return
   state.customerProfileLoading = true
   try {
-    if (state.token === 'demo-token') {
-      state.customerProfile = {
-        asset: customer,
-        businessScope: customer.businessScope || '欧洲出境及中国入境定制旅行',
-        travelProfile: null,
-        destinations: [],
-        languages: [],
-        sources: []
-      }
-      return
-    }
-    state.customerProfile = await request(`/api/customers/${customer.id}/asset-profile`)
+    state.customerProfile = await request(`/api/customers/${customer.id}/asset-profile`) as CustomerProfile
     if (state.customerProfile?.asset) {
       state.selectedCustomer = state.customerProfile.asset
       replaceCustomer(state.customerProfile.asset)
     }
-  } catch (error) {
+  } catch (error: unknown) {
     state.customerProfile = {
       asset: customer,
       businessScope: customer.businessScope || '',
@@ -908,15 +941,16 @@ async function loadCustomerProfile(customer = state.selectedCustomer) {
       languages: [],
       sources: []
     }
-    if (error?.message && error.message !== '客户资产不存在或无权访问') {
-      state.error = `客户全局画像加载失败：${error.message}`
+    const err = error as { message?: string }
+    if (err?.message && err.message !== '客户资产不存在或无权访问') {
+      state.error = `客户全局画像加载失败：${err.message}`
     }
   } finally {
     state.customerProfileLoading = false
   }
 }
 
-export async function saveCustomerEdit() {
+export async function saveCustomerEdit(): Promise<void> {
   if (!state.customerCreateMode && !state.selectedCustomer) return
   state.loading = true
   state.error = ''
@@ -927,11 +961,11 @@ export async function saveCustomerEdit() {
       ? await request('/api/customers', {
           method: 'POST',
           body: JSON.stringify(body)
-        })
-      : await request(`/api/customers/${state.selectedCustomer.id}`, {
+        }) as Customer
+      : await request(`/api/customers/${state.selectedCustomer!.id}`, {
           method: 'PUT',
           body: JSON.stringify(body)
-        })
+        }) as Customer
     if (state.customerCreateMode) {
       addCustomer(updated)
     } else {
@@ -943,8 +977,9 @@ export async function saveCustomerEdit() {
     resetCustomerEditorState()
     await loadCustomerProfile(updated)
     state.notice = wasCreating ? '客户资产已创建' : '客户资产已更新'
-  } catch (error) {
-    state.error = error.message || '保存失败'
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    state.error = err.message || '保存失败'
   } finally {
     state.loading = false
   }
@@ -952,33 +987,28 @@ export async function saveCustomerEdit() {
 
 export const EMAIL_QUALITY_OPTIONS = ['PENDING', 'VERIFIED', 'BOUNCED', 'MISSING']
 
-async function updateEmailQuality(customer, quality) {
+async function updateEmailQuality(customer: Customer, quality: EmailQuality): Promise<void> {
   if (!customer || customer.emailQuality === quality) return
   state.loading = true
   state.error = ''
   state.notice = ''
   try {
-    if (state.token === 'demo-token') {
-      const updated = { ...customer, emailQuality: quality }
-      replaceCustomer(updated)
-      state.customerSummary = summarizeCustomers(state.customers)
-    } else {
-      const updated = await request(`/api/customers/${customer.id}/email-quality`, {
-        method: 'PATCH',
-        body: JSON.stringify({ emailQuality: quality })
-      })
-      replaceCustomer(updated)
-      await loadCustomerSummary()
-    }
+    const updated = await request(`/api/customers/${customer.id}/email-quality`, {
+      method: 'PATCH',
+      body: JSON.stringify({ emailQuality: quality })
+    }) as Customer
+    replaceCustomer(updated)
+    await loadCustomerSummary()
     state.notice = `邮箱状态已更新为 ${quality}`
-  } catch (error) {
-    state.error = error.message || '更新失败'
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    state.error = err.message || '更新失败'
   } finally {
     state.loading = false
   }
 }
 
-export function setCustomerTool(tool) {
+export function setCustomerTool(tool: string): void {
   if (tool === 'imports' && !canAccessNav('imports')) {
     state.error = '当前角色没有使用客户导入的权限'
     return
@@ -995,7 +1025,17 @@ export function setCustomerTool(tool) {
   }
 }
 
-export function normalizePageResult(result, fallbackItems = [], fallbackPage = 0, fallbackSize = 20) {
+interface PageResultLike<T> {
+  items?: T[]
+  page?: number
+  size?: number
+  totalItems?: number
+  totalPages?: number
+  hasNext?: boolean
+  hasPrevious?: boolean
+}
+
+export function normalizePageResult<T>(result: T[] | PageResultLike<T> | null | undefined, fallbackItems: T[] = [], fallbackPage = 0, fallbackSize = 20): PageResult<T> {
   if (Array.isArray(result)) {
     return {
       items: result,
@@ -1021,7 +1061,7 @@ export function normalizePageResult(result, fallbackItems = [], fallbackPage = 0
   }
 }
 
-export function localPageResult(items, page = 0, size = 20) {
+export function localPageResult<T>(items: T[], page = 0, size = 20): PageResult<T> {
   const safeSize = Number(size) > 0 ? Number(size) : 20
   const safePage = Math.max(0, Number(page) || 0)
   const totalItems = items.length
@@ -1039,8 +1079,8 @@ export function localPageResult(items, page = 0, size = 20) {
   }
 }
 
-export function summarizeCustomers(items) {
-  const countryCounts = new Map()
+export function summarizeCustomers(items: Customer[]): CustomerSummary {
+  const countryCounts = new Map<string, number>()
   for (const item of items) {
     const country = String(item.country || '').trim() || '未填写'
     countryCounts.set(country, (countryCounts.get(country) || 0) + 1)
@@ -1064,8 +1104,8 @@ export function summarizeCustomers(items) {
   }
 }
 
-export function statusStats(items, key) {
-  const counts = new Map()
+export function statusStats<T extends Record<string, unknown>>(items: T[], key: keyof T): SummaryStatItem[] {
+  const counts = new Map<string, number>()
   for (const item of items) {
     const status = String(item[key] || '').trim() || 'UNKNOWN'
     counts.set(status, (counts.get(status) || 0) + 1)
@@ -1075,13 +1115,13 @@ export function statusStats(items, key) {
     .sort((left, right) => right.customers - left.customers || left.status.localeCompare(right.status))
 }
 
-export function isReachableCustomer(customer) {
+export function isReachableCustomer(customer: Customer): boolean {
   if (!customer?.email) return false
   if (customer.emailQuality === 'MISSING') return false
   return !['UNSUBSCRIBED', 'BOUNCED', 'INVALID'].includes(customer.contactStatus)
 }
 
-export function summarizeSegments(segments, customers) {
+export function summarizeSegments(segments: Segment[], customers: Customer[]): SegmentSummary {
   return {
     segmentCount: segments.length,
     memberCount: 0,
@@ -1091,11 +1131,7 @@ export function summarizeSegments(segments, customers) {
   }
 }
 
-export function stateTokenIsDemo() {
-  return localStorage.getItem('travel_admin_token') === 'demo-token'
-}
-
-export function emptyPageResult(page = 0, size = 20) {
+export function emptyPageResult<T>(page = 0, size = 20): PageResult<T> {
   return {
     items: [],
     page,
@@ -1107,7 +1143,12 @@ export function emptyPageResult(page = 0, size = 20) {
   }
 }
 
-export function pageQuery(pageInfo, nextPage = pageInfo.page) {
+interface PageInfo {
+  page: number
+  size: number
+}
+
+export function pageQuery(pageInfo: PageInfo, nextPage = pageInfo.page): string {
   const params = new URLSearchParams({
     page: String(Math.max(0, nextPage)),
     size: String(pageInfo.size)
@@ -1115,7 +1156,7 @@ export function pageQuery(pageInfo, nextPage = pageInfo.page) {
   return params.toString()
 }
 
-export function boundedPage(pageInfo, pageNumber) {
+export function boundedPage(pageInfo: { totalPages?: number }, pageNumber: number | string): number | null {
   const value = Number(pageNumber)
   if (!Number.isFinite(value)) return null
   const totalPages = Number(pageInfo.totalPages || 0)
@@ -1123,90 +1164,94 @@ export function boundedPage(pageInfo, pageNumber) {
   return Math.min(Math.max(Math.trunc(value) - 1, 0), totalPages - 1)
 }
 
-export function changeCustomerPage(nextPage) {
+export function changeCustomerPage(nextPage: number): void {
   if (nextPage < 0 || (state.customerPage.totalPages && nextPage >= state.customerPage.totalPages)) return
   loadCustomers(nextPage)
 }
 
-export function jumpCustomerPage(pageNumber) {
+export function jumpCustomerPage(pageNumber: number | string): void {
   const nextPage = boundedPage(state.customerPage, pageNumber)
   if (nextPage === null || nextPage === state.customerPage.page) return
   loadCustomers(nextPage)
 }
 
-export function changeCustomerPageSize(size) {
+export function changeCustomerPageSize(size: number | string): void {
   const nextSize = Number(size)
   if (!nextSize) return
   state.customerPage.size = nextSize
   loadCustomers(0)
 }
 
-export function changeChannelPage(nextPage) {
+export function changeChannelPage(nextPage: number): void {
   if (nextPage < 0 || (state.channelPage.totalPages && nextPage >= state.channelPage.totalPages)) return
   loadChannels(nextPage)
 }
 
-export function jumpChannelPage(pageNumber) {
+export function jumpChannelPage(pageNumber: number | string): void {
   const nextPage = boundedPage(state.channelPage, pageNumber)
   if (nextPage === null || nextPage === state.channelPage.page) return
   loadChannels(nextPage)
 }
 
-export function changeChannelPageSize(size) {
+export function changeChannelPageSize(size: number | string): void {
   const nextSize = Number(size)
   if (!nextSize) return
   state.channelPage.size = nextSize
   loadChannels(0)
 }
 
-export function changeSegmentPage(nextPage) {
+export function changeSegmentPage(nextPage: number): void {
   if (nextPage < 0 || (state.segmentPage.totalPages && nextPage >= state.segmentPage.totalPages)) return
   loadSegments(nextPage)
 }
 
-export function jumpSegmentPage(pageNumber) {
+export function jumpSegmentPage(pageNumber: number | string): void {
   const nextPage = boundedPage(state.segmentPage, pageNumber)
   if (nextPage === null || nextPage === state.segmentPage.page) return
   loadSegments(nextPage)
 }
 
-export function changeSegmentPageSize(size) {
+export function changeSegmentPageSize(size: number | string): void {
   const nextSize = Number(size)
   if (!nextSize) return
   state.segmentPage.size = nextSize
   loadSegments(0)
 }
 
-export function changeCampaignPage(nextPage) {
+export function changeCampaignPage(nextPage: number): void {
   if (nextPage < 0 || (state.campaignPage.totalPages && nextPage >= state.campaignPage.totalPages)) return
   loadCampaigns(nextPage)
 }
 
-export function jumpCampaignPage(pageNumber) {
+export function jumpCampaignPage(pageNumber: number | string): void {
   const nextPage = boundedPage(state.campaignPage, pageNumber)
   if (nextPage === null || nextPage === state.campaignPage.page) return
   loadCampaigns(nextPage)
 }
 
-export function changeCampaignPageSize(size) {
+export function changeCampaignPageSize(size: number | string): void {
   const nextSize = Number(size)
   if (!nextSize) return
   state.campaignPage.size = nextSize
   loadCampaigns(0)
 }
 
-export function csvToList(value) {
+export function csvToList(value: unknown): string[] {
   return String(value || '')
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean)
 }
 
-export function fillSegmentForm(segment) {
+export function fillSegmentForm(segment: Segment): void {
   state.selectedSegment = segment
-  let rules = []
+  let rules: SegmentRuleCondition[] = []
   if (segment.rules?.conditions) {
-    rules = segment.rules.conditions.map(c => ({ ...c, _valueText: Array.isArray(c.values) ? c.values.join(',') : (c.values?.[0] ?? '') }))
+    rules = segment.rules.conditions.map((c) => ({
+      ...c,
+      _valueText: Array.isArray(c.values) ? c.values.join(',') : (c.values?.[0] ?? ''),
+      _countryValues: c.field === 'country' && Array.isArray(c.values) ? [...c.values] : []
+    }))
   }
   state.segmentForm = {
     id: segment.id,
@@ -1214,13 +1259,13 @@ export function fillSegmentForm(segment) {
     description: segment.description || '',
     rules
   }
-  loadSegmentMembers(segment.id)
+  loadSegmentMembers(String(segment.id))
 }
 
-export function resetSegmentForm() {
+export function resetSegmentForm(): void {
   state.selectedSegment = null
   state.segmentMembers = []
-  state.segmentMemberPage = emptyPageResult(0, state.segmentMemberPage.size)
+  state.segmentMemberPage = emptyPageResult<Customer>(0, state.segmentMemberPage.size)
   state.segmentForm = {
     id: '',
     name: '',
@@ -1254,42 +1299,43 @@ export const RULE_OPS = [
   { value: 'IS_NOT_EMPTY', label: '不为空 (IS_NOT_EMPTY)', multi: false },
 ]
 
-export function ruleOpIsMulti(op) {
+export function ruleOpIsMulti(op: string): boolean {
   return RULE_OPS.find(o => o.value === op)?.multi ?? false
 }
 
-export function ruleOpHasValue(op) {
+export function ruleOpHasValue(op: string): boolean {
   return op !== 'IS_EMPTY' && op !== 'IS_NOT_EMPTY'
 }
 
-export function addRule() {
-  state.segmentForm.rules.push({ field: 'country', op: 'IN', values: [], _valueText: '' })
+export function addRule(): void {
+  state.segmentForm.rules.push({ field: 'country', op: 'IN', values: [], _valueText: '', _countryValues: [] })
 }
 
-export function removeRule(index) {
+export function removeRule(index: number): void {
   state.segmentForm.rules.splice(index, 1)
 }
 
-export function buildRules(rules) {
+export function buildRules(rules: SegmentRuleCondition[]): SegmentRule | null {
   if (!rules || rules.length === 0) return null
   const conditions = rules.map(r => {
     const isMulti = ruleOpIsMulti(r.op)
     const hasVal = ruleOpHasValue(r.op)
-    let values
+    let values: string[]
     if (!hasVal) {
       values = []
+    } else if (r.field === 'country' && Array.isArray(r._countryValues)) {
+      values = isMulti ? [...r._countryValues] : [r._countryValues[0]].filter(Boolean)
     } else if (isMulti) {
       values = (r._valueText || '').split(',').map(v => v.trim()).filter(Boolean)
     } else {
       values = [(r._valueText || '')].filter(Boolean)
     }
-    const c = { field: r.field, op: r.op, values }
-    return c
+    return { field: r.field, op: r.op, values }
   })
   return { logic: 'AND', conditions }
 }
 
-export function segmentPayload() {
+export function segmentPayload(): { name: string; description: string; rules: SegmentRule | null } {
   return {
     name: state.segmentForm.name,
     description: state.segmentForm.description,
@@ -1297,7 +1343,7 @@ export function segmentPayload() {
   }
 }
 
-export function fillCampaignForm(campaign) {
+export function fillCampaignForm(campaign: Campaign): void {
   state.selectedCampaign = campaign
   state.campaignForm.name = campaign.name || ''
   state.campaignForm.objective = campaign.objective || ''
@@ -1310,7 +1356,7 @@ export function fillCampaignForm(campaign) {
   state.campaignForm.trackingShortCode = campaign.trackingLink?.shortCode || state.campaignForm.trackingShortCode
   state.campaignForm.trackingUtmSource = campaign.trackingLink?.utmSource || 'email'
   state.campaignForm.trackingUtmMedium = campaign.trackingLink?.utmMedium || 'email'
-  state.campaignForm.trackingUtmCampaign = campaign.trackingLink?.utmCampaign || campaign.id || state.campaignForm.trackingUtmCampaign
+  state.campaignForm.trackingUtmCampaign = campaign.trackingLink?.utmCampaign || String(campaign.id) || state.campaignForm.trackingUtmCampaign
   state.campaignForm.trackingUtmContent = campaign.trackingLink?.utmContent || state.campaignForm.trackingUtmContent
   state.campaignForm.trackingUtmTerm = campaign.trackingLink?.utmTerm || ''
   state.campaignForm.channelId = campaign.channelId || ''
@@ -1321,7 +1367,7 @@ export function fillCampaignForm(campaign) {
   updateLocalTemplatePreview()
 }
 
-export function defaultCampaignForm() {
+export function defaultCampaignForm(): CampaignForm {
   return {
     name: '先锋中国行程推广邮件',
     objective: '向海外旅行社推广 9 天 8 晚中国文化线路',
@@ -1341,7 +1387,7 @@ export function defaultCampaignForm() {
   }
 }
 
-export function clearCampaignSelection() {
+export function clearCampaignSelection(): void {
   state.selectedCampaign = null
   state.campaignForm = defaultCampaignForm()
   state.segmentDropdownOpen = false
@@ -1350,25 +1396,25 @@ export function clearCampaignSelection() {
   updateLocalTemplatePreview()
 }
 
-export function openCampaignDetail(campaign) {
+export function openCampaignDetail(campaign: Campaign): void {
   fillCampaignForm(campaign)
   activateNav('campaigns')
   state.error = ''
 }
 
-export function openCampaignList() {
+export function openCampaignList(): void {
   activateNav('campaign-list')
   state.error = ''
   loadCampaigns()
 }
 
-export function startNewCampaign() {
+export function startNewCampaign(): void {
   clearCampaignSelection()
   activateNav('campaigns')
   state.error = ''
 }
 
-export function syncCampaignTemplateVariables() {
+export function syncCampaignTemplateVariables(): void {
   state.campaignForm.templateVariables = syncTemplateVariables({
     subject: state.campaignForm.subject,
     htmlBody: state.campaignForm.htmlBody,
@@ -1377,7 +1423,7 @@ export function syncCampaignTemplateVariables() {
   updateLocalTemplatePreview()
 }
 
-export function updateLocalTemplatePreview() {
+export function updateLocalTemplatePreview(): void {
   const preview = renderTemplatePreview({
     subject: state.campaignForm.subject,
     htmlBody: state.campaignForm.htmlBody,
@@ -1388,12 +1434,12 @@ export function updateLocalTemplatePreview() {
   state.templatePreviewError = ''
 }
 
-export function templateVariablesJson() {
+export function templateVariablesJson(): string {
   syncCampaignTemplateVariables()
   return templateVariablesToJson(state.campaignForm.templateVariables)
 }
 
-export function addTemplateVariable() {
+export function addTemplateVariable(): void {
   state.campaignForm.templateVariables.push({
     key: '',
     label: '',
@@ -1402,15 +1448,15 @@ export function addTemplateVariable() {
   })
 }
 
-export function removeTemplateVariable(index) {
+export function removeTemplateVariable(index: number): void {
   state.campaignForm.templateVariables.splice(index, 1)
 }
 
-async function insertTemplateVariable(variable) {
+async function insertTemplateVariable(variable: { key?: string }): Promise<void> {
   const key = String(variable?.key || '').trim()
   if (!key) return
   const placeholder = '${' + key + '}'
-  const editor = document.getElementById('campaign-html-editor')
+  const editor = document.getElementById('campaign-html-editor') as HTMLTextAreaElement | null
   if (!editor) {
     state.campaignForm.htmlBody += placeholder
     syncCampaignTemplateVariables()
@@ -1425,7 +1471,14 @@ async function insertTemplateVariable(variable) {
   editor.setSelectionRange(start + placeholder.length, start + placeholder.length)
 }
 
-export function campaignTemplatePayload() {
+export interface CampaignTemplatePayload {
+  subject: string
+  fromName: string
+  htmlBody: string
+  variablesJson: string
+}
+
+export function campaignTemplatePayload(): CampaignTemplatePayload {
   syncCampaignTemplateVariables()
   return {
     subject: state.campaignForm.subject,
@@ -1435,11 +1488,11 @@ export function campaignTemplatePayload() {
   }
 }
 
-export function campaignHtmlHasTrackingLinkParam() {
+export function campaignHtmlHasTrackingLinkParam(): boolean {
   return scanTemplateVariableKeys(state.campaignForm.htmlBody).includes(REQUIRED_TRACKING_LINK_PARAM)
 }
 
-export function validateCampaignTemplateTrackingLink() {
+export function validateCampaignTemplateTrackingLink(): boolean {
   if (campaignHtmlHasTrackingLinkParam()) return true
   state.templatePreviewHtml = ''
   state.templatePreviewSubject = ''
@@ -1448,7 +1501,17 @@ export function validateCampaignTemplateTrackingLink() {
   return false
 }
 
-export function campaignTrackingLinkPayload() {
+export interface CampaignTrackingLinkPayload {
+  targetUrl: string
+  shortCode: string
+  utmSource: string
+  utmMedium: string
+  utmCampaign: string
+  utmContent: string
+  utmTerm: string
+}
+
+export function campaignTrackingLinkPayload(): CampaignTrackingLinkPayload {
   return {
     targetUrl: state.campaignForm.trackingTargetUrl,
     shortCode: state.campaignForm.trackingShortCode,
@@ -1460,7 +1523,7 @@ export function campaignTrackingLinkPayload() {
   }
 }
 
-export function openTrackingLinkDialog() {
+export function openTrackingLinkDialog(): void {
   if (!state.selectedCampaign?.id) {
     state.error = '请先创建或选择活动'
     return
@@ -1468,11 +1531,11 @@ export function openTrackingLinkDialog() {
   state.trackingLinkDialogOpen = true
 }
 
-export function closeTrackingLinkDialog() {
+export function closeTrackingLinkDialog(): void {
   state.trackingLinkDialogOpen = false
 }
 
-export function openFinalConfirmDialog() {
+export function openFinalConfirmDialog(): void {
   if (!state.selectedCampaign?.id) {
     state.error = '请先选择或创建活动'
     return
@@ -1481,11 +1544,11 @@ export function openFinalConfirmDialog() {
   state.error = ''
 }
 
-export function closeFinalConfirmDialog() {
+export function closeFinalConfirmDialog(): void {
   state.finalConfirmDialogOpen = false
 }
 
-async function openTestEmailDialog() {
+async function openTestEmailDialog(): Promise<void> {
   if (!state.selectedCampaign?.id) {
     state.error = '请先选择或创建活动'
     return
@@ -1495,32 +1558,29 @@ async function openTestEmailDialog() {
   await loadTestEmails()
 }
 
-export function closeTestEmailDialog() {
+export function closeTestEmailDialog(): void {
   state.testEmailDialogOpen = false
 }
 
-async function loadTestEmails() {
-  if (state.token === 'demo-token') {
-    state.testEmails = []
-    return
-  }
+async function loadTestEmails(): Promise<void> {
   try {
-    state.testEmails = await request('/api/campaigns/test-emails')
-  } catch (error) {
+    state.testEmails = await request('/api/campaigns/test-emails') as TestEmail[]
+  } catch (error: unknown) {
+    const err = error as { message?: string }
     state.testEmails = []
-    state.error = `测试邮箱加载失败：${error.message}`
+    state.error = `测试邮箱加载失败：${err.message}`
   }
 }
 
-export function normalizeEmailInput(email) {
+export function normalizeEmailInput(email: unknown): string {
   return String(email || '').trim().toLowerCase()
 }
 
-export function isTestEmailSelected(email) {
+export function isTestEmailSelected(email: string): boolean {
   return state.selectedTestEmails.includes(normalizeEmailInput(email))
 }
 
-export function toggleTestEmail(email) {
+export function toggleTestEmail(email: string): void {
   const normalized = normalizeEmailInput(email)
   if (!normalized) return
   if (isTestEmailSelected(normalized)) {
@@ -1530,7 +1590,7 @@ export function toggleTestEmail(email) {
   state.selectedTestEmails = [...state.selectedTestEmails, normalized]
 }
 
-async function addTestEmail() {
+async function addTestEmail(): Promise<void> {
   const email = normalizeEmailInput(state.newTestEmail)
   if (!email) {
     state.error = '请输入测试邮箱'
@@ -1539,25 +1599,24 @@ async function addTestEmail() {
   state.loading = true
   state.error = ''
   try {
-    if (state.token !== 'demo-token') {
-      await request('/api/campaigns/test-emails', {
-        method: 'POST',
-        body: JSON.stringify({ email })
-      })
-      await loadTestEmails()
-    }
+    await request('/api/campaigns/test-emails', {
+      method: 'POST',
+      body: JSON.stringify({ email })
+    })
+    await loadTestEmails()
     if (!isTestEmailSelected(email)) {
       state.selectedTestEmails = [...state.selectedTestEmails, email]
     }
     state.newTestEmail = ''
-  } catch (error) {
-    state.error = `测试邮箱保存失败：${error.message}`
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    state.error = `测试邮箱保存失败：${err.message}`
   } finally {
     state.loading = false
   }
 }
 
-async function deleteTestEmail(testEmail) {
+async function deleteTestEmail(testEmail: TestEmail): Promise<void> {
   if (!testEmail?.id) return
   state.loading = true
   state.error = ''
@@ -1565,14 +1624,15 @@ async function deleteTestEmail(testEmail) {
     await request(`/api/campaigns/test-emails/${testEmail.id}`, { method: 'DELETE' })
     state.selectedTestEmails = state.selectedTestEmails.filter((email) => email !== normalizeEmailInput(testEmail.email))
     await loadTestEmails()
-  } catch (error) {
-    state.error = `测试邮箱删除失败：${error.message}`
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    state.error = `测试邮箱删除失败：${err.message}`
   } finally {
     state.loading = false
   }
 }
 
-export function filteredCampaignSegments() {
+export function filteredCampaignSegments(): Segment[] {
   const keyword = state.segmentDropdownQuery.trim().toLowerCase()
   if (!keyword) return state.segments
   return state.segments.filter((segment) =>
@@ -1582,17 +1642,17 @@ export function filteredCampaignSegments() {
   )
 }
 
-export function selectedCampaignSegments() {
+export function selectedCampaignSegments(): Segment[] {
   return state.campaignForm.segmentIds
     .map((id) => state.segments.find((segment) => segment.id === id))
-    .filter(Boolean)
+    .filter((s): s is Segment => Boolean(s))
 }
 
-export function isCampaignSegmentSelected(segmentId) {
+export function isCampaignSegmentSelected(segmentId: string | number): boolean {
   return state.campaignForm.segmentIds.includes(segmentId)
 }
 
-export function toggleCampaignSegment(segmentId) {
+export function toggleCampaignSegment(segmentId: string | number): void {
   if (isCampaignSegmentSelected(segmentId)) {
     state.campaignForm.segmentIds = state.campaignForm.segmentIds.filter((id) => id !== segmentId)
     return
@@ -1600,11 +1660,11 @@ export function toggleCampaignSegment(segmentId) {
   state.campaignForm.segmentIds = [...state.campaignForm.segmentIds, segmentId]
 }
 
-export function removeCampaignSegment(segmentId) {
+export function removeCampaignSegment(segmentId: string | number): void {
   state.campaignForm.segmentIds = state.campaignForm.segmentIds.filter((id) => id !== segmentId)
 }
 
-export function persistSession(result) {
+export function persistSession(result: { accessToken: string; email: string; tenantId: string | number; userId: string | number; roles?: UserRole[] }): void {
   state.token = result.accessToken
   state.user = {
     email: result.email,
@@ -1617,7 +1677,7 @@ export function persistSession(result) {
   normalizeActiveNavAccess()
 }
 
-async function login() {
+export async function login(): Promise<void> {
   state.loading = true
   state.error = ''
   state.notice = ''
@@ -1639,19 +1699,20 @@ async function login() {
         email: state.authForm.email,
         password: state.authForm.password
       })
-    })
+    }) as { accessToken: string; email: string; tenantId: string | number; userId: string | number; roles?: UserRole[] }
     persistSession(result)
     await refreshAll()
     state.notice = '已进入租户后台'
     void router.replace(navToPath(state.activeNav, state.customerTool)).catch(() => {})
-  } catch (error) {
-    state.error = `认证失败：${error.message}`
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    state.error = `认证失败：${err.message}`
   } finally {
     state.loading = false
   }
 }
 
-export function logout() {
+export function logout(): void {
   state.token = ''
   state.user = null
   setCustomerToolState('list')
@@ -1664,9 +1725,6 @@ export function logout() {
 }
 
 async function refreshAll() {
-  if (state.token === 'demo-token') {
-    return
-  }
   const loaders = []
   if (canAccessNav('customers') || canAccessNav('dashboard')) {
     loaders.push(loadCustomers())
@@ -1707,10 +1765,6 @@ async function refreshAll() {
 }
 
 async function loadCustomerSummary() {
-  if (state.token === 'demo-token') {
-    state.customerSummary = summarizeCustomers(demoCustomers)
-    return
-  }
   try {
     state.customerSummary = await request('/api/customers/summary')
   } catch (error) {
@@ -1720,10 +1774,6 @@ async function loadCustomerSummary() {
 }
 
 async function loadSegmentSummary() {
-  if (state.token === 'demo-token') {
-    state.segmentSummary = summarizeSegments(state.segments, demoCustomers)
-    return
-  }
   try {
     state.segmentSummary = await request('/api/segments/summary')
   } catch (error) {
@@ -1732,7 +1782,7 @@ async function loadSegmentSummary() {
   }
 }
 
-export function replaceCustomer(updatedCustomer) {
+export function replaceCustomer(updatedCustomer: Customer): void {
   state.customers = state.customers.map((customer) => (customer.id === updatedCustomer.id ? updatedCustomer : customer))
   if (state.selectedCustomer?.id === updatedCustomer.id) {
     state.selectedCustomer = updatedCustomer
@@ -1746,7 +1796,7 @@ export function replaceCustomer(updatedCustomer) {
   }
 }
 
-export function addCustomer(customer) {
+export function addCustomer(customer: Customer): void {
   const size = Number(state.customerPage.size || 20)
   const totalItems = Number(state.customerPage.totalItems || 0) + 1
   const totalPages = Math.max(1, Math.ceil(totalItems / size))
@@ -1761,82 +1811,71 @@ export function addCustomer(customer) {
   }
 }
 
-async function loadCustomers(page = state.customerPage.page) {
-  if (state.token === 'demo-token') {
-    const pageResult = localPageResult(demoCustomers, page, state.customerPage.size)
-    state.customers = pageResult.items
-    state.customerPage = pageResult
-    if (state.selectedCustomer) {
-      state.selectedCustomer = pageResult.items.find((item) => item.id === state.selectedCustomer.id) || null
-    }
-    return
-  }
+async function loadCustomers(page = state.customerPage.page): Promise<void> {
   try {
     const result = await request(`/api/customers?${pageQuery(state.customerPage, page)}`)
-    const pageResult = normalizePageResult(result, [], page, state.customerPage.size)
+    const pageResult = normalizePageResult<Customer>(result, [], page, state.customerPage.size)
     state.customers = pageResult.items
     state.customerPage = pageResult
     if (state.selectedCustomer) {
       state.selectedCustomer = pageResult.items.find((item) => item.id === state.selectedCustomer.id) || null
     }
-  } catch (error) {
+  } catch (error: unknown) {
+    const err = error as { message?: string }
     state.customers = []
-    state.customerPage = emptyPageResult(0, state.customerPage.size)
+    state.customerPage = emptyPageResult<Customer>(0, state.customerPage.size)
     state.selectedCustomer = null
-    state.error = `客户资产加载失败：${error.message}`
+    state.error = `客户资产加载失败：${err.message}`
   }
 }
 
-async function loadChannels(page = state.channelPage.page) {
-  if (state.token === 'demo-token') {
-    const pageResult = localPageResult([], page, state.channelPage.size)
-    state.channels = pageResult.items
-    state.channelPage = pageResult
-    return
-  }
+async function loadChannels(page = state.channelPage.page): Promise<void> {
   try {
     const result = await request(`/api/channels?${pageQuery(state.channelPage, page)}`)
-    const pageResult = normalizePageResult(result, [], page, state.channelPage.size)
+    const pageResult = normalizePageResult<Channel>(result, [], page, state.channelPage.size)
     state.channels = pageResult.items
     state.channelPage = pageResult
-  } catch (error) {
+  } catch (error: unknown) {
+    const err = error as { message?: string }
     state.channels = []
-    state.channelPage = normalizePageResult([], [], 0, state.channelPage.size)
-    state.error = `推送通道加载失败：${error.message}`
+    state.channelPage = normalizePageResult<Channel>([], [], 0, state.channelPage.size)
+    state.error = `推送通道加载失败：${err.message}`
   }
 }
 
-async function loadSegments(page = state.segmentPage.page) {
+async function loadSegments(page = state.segmentPage.page): Promise<void> {
   try {
     const result = await request(`/api/segments?${pageQuery(state.segmentPage, page)}`)
-    const pageResult = normalizePageResult(result, [], page, state.segmentPage.size)
+    const pageResult = normalizePageResult<Segment>(result, [], page, state.segmentPage.size)
     state.segments = pageResult.items
     state.segmentPage = pageResult
     if (!state.selectedSegment && pageResult.items.length) {
       fillSegmentForm(pageResult.items[0])
     }
-  } catch (error) {
+  } catch (error: unknown) {
+    const err = error as { message?: string }
     state.segments = []
-    state.segmentPage = emptyPageResult(0, state.segmentPage.size)
-    state.error = `客群加载失败：${error.message}`
+    state.segmentPage = emptyPageResult<Segment>(0, state.segmentPage.size)
+    state.error = `客群加载失败：${err.message}`
   }
 }
 
-async function loadSegmentMembers(segmentId = state.selectedSegment?.id, page = state.segmentMemberPage.page) {
+async function loadSegmentMembers(segmentId = state.selectedSegment?.id, page = state.segmentMemberPage.page): Promise<void> {
   if (!segmentId) return
   try {
     const result = await request(`/api/segments/${segmentId}/members?${pageQuery(state.segmentMemberPage, page)}`)
-    const pageResult = normalizePageResult(result, [], page, state.segmentMemberPage.size)
+    const pageResult = normalizePageResult<Customer>(result, [], page, state.segmentMemberPage.size)
     state.segmentMembers = pageResult.items
     state.segmentMemberPage = pageResult
-  } catch (error) {
+  } catch (error: unknown) {
+    const err = error as { message?: string }
     state.segmentMembers = []
-    state.segmentMemberPage = emptyPageResult(0, state.segmentMemberPage.size)
-    state.error = `客群成员加载失败：${error.message}`
+    state.segmentMemberPage = emptyPageResult<Customer>(0, state.segmentMemberPage.size)
+    state.error = `客群成员加载失败：${err.message}`
   }
 }
 
-async function saveSegment() {
+export async function saveSegment(): Promise<void> {
   state.loading = true
   state.error = ''
   state.notice = ''
@@ -1845,36 +1884,37 @@ async function saveSegment() {
     const result = await request(isUpdate ? `/api/segments/${state.segmentForm.id}` : '/api/segments', {
       method: isUpdate ? 'PUT' : 'POST',
       body: JSON.stringify(segmentPayload())
-    })
+    }) as Segment
     state.notice = isUpdate ? '客群规则已更新' : '客群已创建'
     await loadSegments()
     fillSegmentForm(result)
-  } catch (error) {
-    state.error = `客群保存失败：${error.message}`
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    state.error = `客群保存失败：${err.message}`
   } finally {
     state.loading = false
   }
 }
 
-export function changeSegmentMemberPage(nextPage) {
+export function changeSegmentMemberPage(nextPage: number): void {
   if (nextPage < 0 || (state.segmentMemberPage.totalPages && nextPage >= state.segmentMemberPage.totalPages)) return
   loadSegmentMembers(state.selectedSegment?.id, nextPage)
 }
 
-export function changeSegmentMemberPageSize(size) {
+export function changeSegmentMemberPageSize(size: number | string): void {
   const nextSize = Number(size)
   if (!nextSize) return
   state.segmentMemberPage.size = nextSize
   loadSegmentMembers(state.selectedSegment?.id, 0)
 }
 
-export function jumpSegmentMemberPage(pageNumber) {
+export function jumpSegmentMemberPage(pageNumber: number | string): void {
   const nextPage = boundedPage(state.segmentMemberPage, pageNumber)
   if (nextPage === null || nextPage === state.segmentMemberPage.page) return
   loadSegmentMembers(state.selectedSegment?.id, nextPage)
 }
 
-async function refreshSegment(segmentId = state.selectedSegment?.id) {
+export async function refreshSegment(segmentId = state.selectedSegment?.id): Promise<void> {
   if (!segmentId) {
     state.error = '请先选择客群'
     return
@@ -1883,20 +1923,21 @@ async function refreshSegment(segmentId = state.selectedSegment?.id) {
   state.error = ''
   state.notice = ''
   try {
-    state.segmentRefreshResult = await request(`/api/segments/${segmentId}/refresh`, { method: 'POST', body: JSON.stringify({}) })
+    state.segmentRefreshResult = await request(`/api/segments/${segmentId}/refresh`, { method: 'POST', body: JSON.stringify({}) }) as SegmentRefreshResult
     await loadSegmentMembers(segmentId, 0)
     state.notice = `客群已刷新，命中 ${state.segmentRefreshResult.matchedCount} 个客户`
-  } catch (error) {
-    state.error = `客群刷新失败：${error.message}`
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    state.error = `客群刷新失败：${err.message}`
   } finally {
     state.loading = false
   }
 }
 
-async function loadCampaigns(page = state.campaignPage.page) {
+async function loadCampaigns(page = state.campaignPage.page): Promise<void> {
   try {
     const result = await request(`/api/campaigns?${pageQuery(state.campaignPage, page)}`)
-    const pageResult = normalizePageResult(result, [], page, state.campaignPage.size)
+    const pageResult = normalizePageResult<Campaign>(result, [], page, state.campaignPage.size)
     state.campaigns = pageResult.items
     state.campaignPage = pageResult
     if (state.selectedCampaign && !pageResult.items.some((item) => item.id === state.selectedCampaign.id)) {
@@ -1911,80 +1952,72 @@ async function loadCampaigns(page = state.campaignPage.page) {
     if (!state.selectedCampaign && pageResult.items.length) {
       fillCampaignForm(pageResult.items[0])
     }
-  } catch (error) {
+  } catch (error: unknown) {
+    const err = error as { message?: string }
     state.campaigns = []
-    state.campaignPage = emptyPageResult(0, state.campaignPage.size)
+    state.campaignPage = emptyPageResult<Campaign>(0, state.campaignPage.size)
     clearCampaignSelection()
-    state.error = `活动加载失败：${error.message}`
+    state.error = `活动加载失败：${err.message}`
   }
 }
 
-async function loadTrackingAnalytics(page = state.trackingEventPage.page, linkPage = state.trackingLinkPage.page) {
-  if (state.token === 'demo-token') {
-    state.trackingSummary = { totalClicks: 0, clickedCustomers: 0, shortLinks: 0, clickRate: 0 }
-    state.trackingTimeseries = []
-    state.trackingUtmStats = []
-    state.trackingLinkStats = []
-    state.trackingLinkPage = emptyPageResult(0, state.trackingLinkPage.size)
-    state.trackingEvents = []
-    state.trackingEventPage = emptyPageResult(0, state.trackingEventPage.size)
-    return
-  }
+async function loadTrackingAnalytics(page = state.trackingEventPage.page, linkPage = state.trackingLinkPage.page): Promise<void> {
   try {
     const params = new URLSearchParams()
     if (state.trackingFilter.campaignId) params.set('campaignId', state.trackingFilter.campaignId)
     const querySuffix = params.toString() ? `?${params}` : ''
-    state.trackingSummary = await request(`/api/tracking/analytics/summary${querySuffix}`)
-    state.trackingTimeseries = await request(`/api/tracking/analytics/timeseries${querySuffix}`)
-    state.trackingUtmStats = await request(`/api/tracking/analytics/by-utm${querySuffix}`)
+    state.trackingSummary = await request(`/api/tracking/analytics/summary${querySuffix}`) as TrackingSummary
+    state.trackingTimeseries = await request(`/api/tracking/analytics/timeseries${querySuffix}`) as TrackingTimeseriesPoint[]
+    state.trackingUtmStats = await request(`/api/tracking/analytics/by-utm${querySuffix}`) as TrackingUtmStat[]
     const linkParams = new URLSearchParams(params)
     linkParams.set('page', String(Math.max(0, linkPage)))
     linkParams.set('size', String(state.trackingLinkPage.size))
     const linkResult = await request(`/api/tracking/analytics/by-link?${linkParams}`)
-    const linkPageResult = normalizePageResult(linkResult, [], linkPage, state.trackingLinkPage.size)
+    const linkPageResult = normalizePageResult<TrackingLinkStat>(linkResult, [], linkPage, state.trackingLinkPage.size)
     state.trackingLinkStats = linkPageResult.items
     state.trackingLinkPage = linkPageResult
     const eventParams = new URLSearchParams(params)
     eventParams.set('page', String(Math.max(0, page)))
     eventParams.set('size', String(state.trackingEventPage.size))
     const eventResult = await request(`/api/tracking/analytics/events?${eventParams}`)
-    const pageResult = normalizePageResult(eventResult, [], page, state.trackingEventPage.size)
+    const pageResult = normalizePageResult<TrackingEvent>(eventResult, [], page, state.trackingEventPage.size)
     state.trackingEvents = pageResult.items
     state.trackingEventPage = pageResult
-  } catch (error) {
+  } catch (error: unknown) {
+    const err = error as { message?: string }
     state.trackingEvents = []
     state.trackingTimeseries = []
     state.trackingUtmStats = []
     state.trackingLinkStats = []
-    state.trackingLinkPage = emptyPageResult(0, state.trackingLinkPage.size)
-    state.trackingEventPage = emptyPageResult(0, state.trackingEventPage.size)
-    state.error = `短链统计加载失败：${error.message}`
+    state.trackingLinkPage = emptyPageResult<TrackingLinkStat>(0, state.trackingLinkPage.size)
+    state.trackingEventPage = emptyPageResult<TrackingEvent>(0, state.trackingEventPage.size)
+    state.error = `短链统计加载失败：${err.message}`
   }
 }
 
-export function changeTrackingEventPage(nextPage) {
+export function changeTrackingEventPage(nextPage: number): void {
   if (nextPage < 0 || (state.trackingEventPage.totalPages && nextPage >= state.trackingEventPage.totalPages)) return
   loadTrackingAnalytics(nextPage)
 }
 
-export function jumpTrackingEventPage(pageNumber) {
+export function jumpTrackingEventPage(pageNumber: number | string): void {
   const nextPage = boundedPage(state.trackingEventPage, pageNumber)
   if (nextPage === null || nextPage === state.trackingEventPage.page) return
   loadTrackingAnalytics(nextPage)
 }
 
-export function changeTrackingLinkPage(nextPage) {
+export function changeTrackingLinkPage(nextPage: number): void {
   if (nextPage < 0 || (state.trackingLinkPage.totalPages && nextPage >= state.trackingLinkPage.totalPages)) return
   loadTrackingAnalytics(state.trackingEventPage.page, nextPage)
 }
 
-export function jumpTrackingLinkPage(pageNumber) {
+export function jumpTrackingLinkPage(pageNumber: number | string): void {
   const nextPage = boundedPage(state.trackingLinkPage, pageNumber)
   if (nextPage === null || nextPage === state.trackingLinkPage.page) return
   loadTrackingAnalytics(state.trackingEventPage.page, nextPage)
 }
 
-async function createCampaign() {
+async function createCampaign(): Promise<void> {
   state.loading = true
   state.error = ''
   state.notice = ''
@@ -1992,19 +2025,20 @@ async function createCampaign() {
     const campaign = await request('/api/campaigns', {
       method: 'POST',
       body: JSON.stringify({ name: state.campaignForm.name, objective: state.campaignForm.objective })
-    })
+    }) as Campaign
     state.selectedCampaign = campaign
     fillCampaignForm(campaign)
     await loadCampaigns()
     state.notice = '邮件活动已创建'
-  } catch (error) {
-    state.error = `活动创建失败：${error.message}`
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    state.error = `活动创建失败：${err.message}`
   } finally {
     state.loading = false
   }
 }
 
-async function saveCampaignSetup() {
+async function saveCampaignSetup(): Promise<void> {
   if (!validateCampaignTemplateTrackingLink()) return
   if (!state.selectedCampaign?.id) {
     await createCampaign()
@@ -2018,30 +2052,31 @@ async function saveCampaignSetup() {
     let campaign = await request(`/api/campaigns/${campaignId}/template`, {
       method: 'PUT',
       body: JSON.stringify(campaignTemplatePayload())
-    })
+    }) as Campaign
     if (state.campaignForm.channelId) {
       campaign = await request(`/api/campaigns/${campaignId}/channel`, {
         method: 'PUT',
         body: JSON.stringify({ channelId: state.campaignForm.channelId })
-      })
+      }) as Campaign
     }
     if (state.campaignForm.segmentIds.length) {
       campaign = await request(`/api/campaigns/${campaignId}/segments`, {
         method: 'PUT',
         body: JSON.stringify({ segmentIds: state.campaignForm.segmentIds })
-      })
+      }) as Campaign
     }
     fillCampaignForm(campaign)
     await loadCampaigns()
     state.notice = '活动配置已保存'
-  } catch (error) {
-    state.error = `活动配置保存失败：${error.message}`
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    state.error = `活动配置保存失败：${err.message}`
   } finally {
     state.loading = false
   }
 }
 
-async function saveCampaignDraftForAdvance() {
+async function saveCampaignDraftForAdvance(): Promise<Campaign | null> {
   if (!validateCampaignTemplateTrackingLink()) return null
 
   let campaign = state.selectedCampaign
@@ -2049,7 +2084,7 @@ async function saveCampaignDraftForAdvance() {
     campaign = await request('/api/campaigns', {
       method: 'POST',
       body: JSON.stringify({ name: state.campaignForm.name, objective: state.campaignForm.objective })
-    })
+    }) as Campaign
     state.selectedCampaign = campaign
   }
 
@@ -2057,13 +2092,13 @@ async function saveCampaignDraftForAdvance() {
   campaign = await request(`/api/campaigns/${campaignId}/template`, {
     method: 'PUT',
     body: JSON.stringify(campaignTemplatePayload())
-  })
+  }) as Campaign
   fillCampaignForm(campaign)
   await loadCampaigns()
   return campaign
 }
 
-async function saveCampaignTrackingLink() {
+async function saveCampaignTrackingLink(): Promise<void> {
   if (!state.selectedCampaign?.id) {
     state.error = '请先创建或选择活动'
     return
@@ -2076,19 +2111,20 @@ async function saveCampaignTrackingLink() {
     const campaign = await request(`/api/campaigns/${campaignId}/tracking-link`, {
       method: 'PUT',
       body: JSON.stringify(campaignTrackingLinkPayload())
-    })
+    }) as Campaign
     fillCampaignForm(campaign)
     await loadCampaigns()
     state.trackingLinkDialogOpen = false
     state.notice = '短链接配置已保存'
-  } catch (error) {
-    state.error = `短链接配置保存失败：${error.message}`
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    state.error = `短链接配置保存失败：${err.message}`
   } finally {
     state.loading = false
   }
 }
 
-async function previewCampaignTemplate() {
+async function previewCampaignTemplate(): Promise<void> {
   if (!validateCampaignTemplateTrackingLink()) return
   if (!state.selectedCampaign?.id) {
     updateLocalTemplatePreview()
@@ -2101,19 +2137,25 @@ async function previewCampaignTemplate() {
     const result = await request(`/api/campaigns/${campaignId}/template/preview`, {
       method: 'POST',
       body: JSON.stringify(campaignTemplatePayload())
-    })
+    }) as { subjectPreview?: string; htmlPreview?: string }
     state.templatePreviewSubject = result.subjectPreview || ''
     state.templatePreviewHtml = result.htmlPreview || ''
-  } catch (error) {
+  } catch (error: unknown) {
+    const err = error as { message?: string }
     state.templatePreviewHtml = ''
     state.templatePreviewSubject = ''
-    state.templatePreviewError = error.message || '模板预览失败'
+    state.templatePreviewError = err.message || '模板预览失败'
   } finally {
     state.templatePreviewLoading = false
   }
 }
 
-async function runCampaignAction(action, options = {}) {
+interface CampaignActionOptions {
+  confirmedTestEmails?: boolean
+  confirmedFinalPush?: boolean
+}
+
+async function runCampaignAction(action: string, options: CampaignActionOptions = {}): Promise<void> {
   if (!state.selectedCampaign?.id) {
     state.error = '请先选择或创建活动'
     return
@@ -2142,16 +2184,16 @@ async function runCampaignAction(action, options = {}) {
   state.notice = ''
   try {
     const campaignId = state.selectedCampaign.id
-    const options = {
+    const requestOptions = {
       method: 'POST',
       body: JSON.stringify(action === 'simulateSend' ? { testEmails: state.selectedTestEmails } : {})
     }
-    const pathMap = {
+    const pathMap: Record<string, string> = {
       prePush: `/api/campaigns/${campaignId}/pre-push`,
       confirm: `/api/campaigns/${campaignId}/confirm`,
       simulateSend: `/api/campaigns/${campaignId}/simulate-send`
     }
-    const campaign = await request(pathMap[action], options)
+    const campaign = await request(pathMap[action], requestOptions) as Campaign
     fillCampaignForm(campaign)
     await loadCampaigns()
     if (action === 'simulateSend') {
@@ -2161,14 +2203,15 @@ async function runCampaignAction(action, options = {}) {
     } else {
       state.notice = '活动状态已更新'
     }
-  } catch (error) {
-    state.error = `活动操作失败：${error.message}`
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    state.error = `活动操作失败：${err.message}`
   } finally {
     state.loading = false
   }
 }
 
-async function advanceCampaignStep(options = {}) {
+async function advanceCampaignStep(options: CampaignActionOptions = {}): Promise<void> {
   if (!campaignNextAction.value) {
     state.error = '当前活动生命周期已完成'
     return
@@ -2193,14 +2236,15 @@ async function advanceCampaignStep(options = {}) {
     const campaign = await saveCampaignDraftForAdvance()
     if (!campaign) return
     state.notice = `已确认并进入下一步：${campaignCurrentStatusLabel.value}`
-  } catch (error) {
-    state.error = `活动状态推进失败：${error.message}`
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    state.error = `活动状态推进失败：${err.message}`
   } finally {
     state.loading = false
   }
 }
 
-async function confirmTestSimulation() {
+async function confirmTestSimulation(): Promise<void> {
   if (!state.selectedTestEmails.length) {
     state.error = '请选择或新增至少一个测试邮箱'
     return
@@ -2208,12 +2252,21 @@ async function confirmTestSimulation() {
   await advanceCampaignStep({ confirmedTestEmails: true })
 }
 
-async function confirmFinalPush() {
+async function confirmFinalPush(): Promise<void> {
   closeFinalConfirmDialog()
   await runCampaignAction('confirm', { confirmedFinalPush: true })
 }
 
-async function rollbackCampaignStep(step) {
+interface CampaignStep {
+  status: CampaignStatus
+  label: string
+  hint?: string
+  active?: boolean
+  done?: boolean
+  rollback?: boolean
+}
+
+async function rollbackCampaignStep(step: CampaignStep | null | undefined): Promise<void> {
   if (!state.selectedCampaign?.id) {
     state.error = '请先选择或创建活动'
     return
@@ -2232,28 +2285,30 @@ async function rollbackCampaignStep(step) {
         expectedStatus: campaignCurrentStatus.value,
         targetStatus: step.status
       })
-    })
+    }) as Campaign
     fillCampaignForm(campaign)
     await loadCampaigns()
     state.notice = `已回退到上一步：${campaignCurrentStatusLabel.value}`
-  } catch (error) {
-    state.error = `活动状态回退失败：${error.message}`
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    state.error = `活动状态回退失败：${err.message}`
   } finally {
     state.loading = false
   }
 }
 
-async function loadMappingPreview() {
+async function loadMappingPreview(): Promise<void> {
   try {
-    const result = await request('/api/customer-mapping/osm/preview')
+    const result = await request('/api/customer-mapping/osm/preview') as MappingPreview
     state.mappingPreview = result
-  } catch (error) {
+  } catch (error: unknown) {
+    const err = error as { message?: string }
     state.mappingPreview = null
-    state.error = `Mapping 预览加载失败：${error.message}`
+    state.error = `Mapping 预览加载失败：${err.message}`
   }
 }
 
-async function createChannel() {
+async function createChannel(): Promise<void> {
   state.loading = true
   state.error = ''
   state.notice = ''
@@ -2277,14 +2332,15 @@ async function createChannel() {
       state.awsSesForm.awsSecretAccessKey = ''
     }
     state.notice = '推送通道已保存'
-  } catch (error) {
-    state.error = `通道保存失败：${error.message}`
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    state.error = `通道保存失败：${err.message}`
   } finally {
     state.loading = false
   }
 }
 
-async function importCustomerJson() {
+async function importCustomerJson(): Promise<void> {
   if (!state.importFile) {
     state.error = '请选择客户 JSON 文件'
     return
@@ -2298,19 +2354,20 @@ async function importCustomerJson() {
     state.importResult = await request('/api/imports/customers-json', {
       method: 'POST',
       body: form
-    })
+    }) as ImportResult
     await Promise.allSettled([loadCustomers(), loadCustomerSummary()])
     activateNav('customers')
     setCustomerToolState('list')
     state.notice = '客户 JSON 导入完成，已写入来源与客户资产主表'
-  } catch (error) {
-    state.error = `导入失败：${error.message}`
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    state.error = `导入失败：${err.message}`
   } finally {
     state.loading = false
   }
 }
 
-async function runOsmMapping() {
+async function runOsmMapping(): Promise<void> {
   state.loading = true
   state.error = ''
   state.notice = ''
@@ -2318,78 +2375,60 @@ async function runOsmMapping() {
     state.mappingResult = await request('/api/customer-mapping/osm', {
       method: 'POST',
       body: JSON.stringify({})
-    })
+    }) as MappingResult
     await Promise.allSettled([loadCustomers(), loadCustomerSummary(), loadMappingPreview()])
     state.notice = 'OSM 来源已 mapping 到客户资产主表'
-  } catch (error) {
-    state.error = `Mapping 失败：${error.message}`
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    state.error = `Mapping 失败：${err.message}`
   } finally {
     state.loading = false
   }
 }
 
-export function onFileChange(event) {
-  state.importFile = event.target.files?.[0] || null
+export function onFileChange(event: Event): void {
+  const target = event.target as HTMLInputElement
+  state.importFile = target.files?.[0] || null
 }
 
-export async function loadDictionaryCountries() {
+export async function loadDictionaryCountries(): Promise<void> {
   if (state.dictionary.countries.length > 0) return
   state.dictionary.loading = true
   state.dictionary.error = ''
   try {
-    if (state.token === 'demo-token') {
-      state.dictionary.countries = [
-        { id: 'CN', alpha3: 'CHN', name: '{"zh":"中国","en":"China"}', languages: 'zh' },
-        { id: 'DE', alpha3: 'DEU', name: '{"zh":"德国","en":"Germany"}', languages: 'de' },
-        { id: 'US', alpha3: 'USA', name: '{"zh":"美国","en":"United States"}', languages: 'en' }
-      ]
-      return
-    }
-    const countries = await request('/api/dictionary/countries')
+    const countries = await request('/api/dictionary/countries') as Country[]
     state.dictionary.countries = countries || []
-  } catch (error) {
-    state.dictionary.error = error.message || '加载国家列表失败'
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    state.dictionary.error = err.message || '加载国家列表失败'
     console.error('Failed to load countries:', error)
   } finally {
     state.dictionary.loading = false
   }
 }
 
-export async function loadDictionaryCities(countryId: string) {
+export async function loadDictionaryCities(countryId: string): Promise<void> {
   if (!countryId) return
   if (state.dictionary.citiesCache[countryId]) return
   state.dictionary.loading = true
   state.dictionary.error = ''
   try {
-    if (state.token === 'demo-token') {
-      const demoCities: Record<string, Array<{id: string, name: string, fullName: string, timezone: string}>> = {
-        CN: [
-          { id: 'CN_BJ', name: '{"zh":"北京"}', fullName: '{"zh":"北京市"}', timezone: 'Asia/Shanghai' },
-          { id: 'CN_SH', name: '{"zh":"上海"}', fullName: '{"zh":"上海市"}', timezone: 'Asia/Shanghai' }
-        ],
-        DE: [
-          { id: 'DE_BERLIN', name: '{"zh":"柏林","en":"Berlin"}', fullName: '{"zh":"柏林","en":"Berlin"}', timezone: 'Europe/Berlin' },
-          { id: 'DE_MUNICH', name: '{"zh":"慕尼黑","en":"Munich"}', fullName: '{"zh":"慕尼黑","en":"Munich"}', timezone: 'Europe/Berlin' }
-        ]
-      }
-      state.dictionary.citiesCache[countryId] = demoCities[countryId] || []
-      return
-    }
-    const cities = await request(`/api/dictionary/cities?countryId=${encodeURIComponent(countryId)}`)
+    const cities = await request(`/api/dictionary/cities?countryId=${encodeURIComponent(countryId)}`) as City[]
     state.dictionary.citiesCache[countryId] = cities || []
-  } catch (error) {
-    state.dictionary.error = error.message || '加载城市列表失败'
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    state.dictionary.error = err.message || '加载城市列表失败'
     console.error('Failed to load cities:', error)
   } finally {
     state.dictionary.loading = false
   }
 }
 
-export function getCitiesByCountryId(countryId: string) {
+export function getCitiesByCountryId(countryId: string): City[] {
   return state.dictionary.citiesCache[countryId] || []
 }
 
-export function clearDictionaryCache() {
+export function clearDictionaryCache(): void {
   state.dictionary.countries = []
   state.dictionary.citiesCache = {}
   state.dictionary.error = ''

@@ -7,11 +7,9 @@
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "allowJs": true,
-    "checkJs": false,
     "lib": ["ES2022", "DOM"],
     "types": ["vite/client"]
   },
-  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.js"]
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "vite.config.ts"]
 }
 
