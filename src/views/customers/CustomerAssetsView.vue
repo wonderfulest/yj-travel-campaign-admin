@@ -306,7 +306,7 @@ import {
   Search,
   X,
 } from "lucide-vue-next";
-import * as admin from "../../state/adminApp";
+import * as admin from "../../state/index";
 import LocationSelect from "../../components/common/LocationSelect.vue";
 import { computed } from "vue";
 

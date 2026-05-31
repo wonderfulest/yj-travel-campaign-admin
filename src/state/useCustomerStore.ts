@@ -16,17 +16,7 @@ import type {
   PageResult,
   SummaryStatItem
 } from '../types.ts'
-import {
-  BarChart3,
-  CheckCircle2,
-  GitMerge,
-  Mail,
-  Send,
-  Users
-} from 'lucide-vue-next'
-import { request } from './useAppStore.ts'
-import { canAccessNav } from './useAppStore.ts'
-import { CUSTOMER_TOOL_STORAGE_KEY, CUSTOMER_TOOLS, normalizeCustomerTool } from '../navigation'
+import { request, appStore } from './appContext.ts'
 
 export const useCustomerStore = defineStore('customer', {
   state: () => ({
@@ -74,30 +64,6 @@ export const filteredCustomers = computed(() => {
   )
 })
 
-export const customerCountryStats = computed(() => {
-  const summary = customerStore.customerSummary || summarizeCustomers(customerStore.customers)
-  return Array.isArray(summary.customersByCountry) ? summary.customersByCountry : []
-})
-
-export const customerQualityStats = computed(() => {
-  const summary = customerStore.customerSummary || summarizeCustomers(customerStore.customers)
-  return Array.isArray(summary.customersByEmailQuality) ? summary.customersByEmailQuality : []
-})
-
-export const customerContactStats = computed(() => {
-  const summary = customerStore.customerSummary || summarizeCustomers(customerStore.customers)
-  return Array.isArray(summary.customersByContactStatus) ? summary.customersByContactStatus : []
-})
-
-export const customerReachabilityStats = computed(() => {
-  const summary = customerStore.customerSummary || summarizeCustomers(customerStore.customers)
-  return [
-    { label: '可触达客户', value: summary.reachableCustomers || 0 },
-    { label: '不可触达客户', value: summary.unreachableCustomers || 0 },
-    { label: '缺少邮箱', value: summary.missingEmailCustomers || 0 },
-    { label: '已验证邮箱', value: summary.verifiedEmailCustomers || 0 }
-  ]
-})
 
 export function summarizeCustomers(items: Customer[]): CustomerSummary {
   const countryCounts = new Map<string, number>()
@@ -294,7 +260,6 @@ export async function loadCustomerProfile(customer: Customer | null = customerSt
     }
     const err = error as { message?: string }
     if (err?.message && err.message !== '客户资产不存在或无权访问') {
-      const { appStore } = await import('./useAppStore.ts')
       appStore.error = `客户全局画像加载失败：${err.message}`
     }
   } finally {
@@ -307,7 +272,6 @@ export async function loadCustomerSummary(): Promise<void> {
     customerStore.customerSummary = await request('/api/customers/summary')
   } catch (error) {
     customerStore.customerSummary = null
-    const { appStore } = await import('./useAppStore.ts')
     appStore.error = `客户统计加载失败：${error.message}`
   }
 }
@@ -326,13 +290,11 @@ export async function loadCustomers(page = customerStore.customerPage.page): Pro
     customerStore.customers = []
     customerStore.customerPage = emptyPageResult<Customer>(0, customerStore.customerPage.size)
     customerStore.selectedCustomer = null
-    const { appStore } = await import('./useAppStore.ts')
     appStore.error = `客户资产加载失败：${err.message}`
   }
 }
 
 export async function saveCustomerEdit(): Promise<void> {
-  const { appStore } = await import('./useAppStore.ts')
   if (!customerStore.customerCreateMode && !customerStore.selectedCustomer) return
   appStore.loading = true
   appStore.error = ''
@@ -370,7 +332,6 @@ export async function saveCustomerEdit(): Promise<void> {
 export const EMAIL_QUALITY_OPTIONS = ['PENDING', 'VERIFIED', 'BOUNCED', 'MISSING']
 
 export async function updateEmailQuality(customer: Customer, quality: EmailQuality): Promise<void> {
-  const { appStore } = await import('./useAppStore.ts')
   if (!customer || customer.emailQuality === quality) return
   appStore.loading = true
   appStore.error = ''
@@ -410,7 +371,6 @@ export function changeCustomerPageSize(size: number | string): void {
 }
 
 export async function importCustomerJson(onSuccess?: () => void): Promise<void> {
-  const { appStore } = await import('./useAppStore.ts')
   if (!customerStore.importFile) {
     appStore.error = '请选择客户 JSON 文件'
     return
@@ -442,13 +402,11 @@ export async function loadMappingPreview(): Promise<void> {
   } catch (error: unknown) {
     const err = error as { message?: string }
     customerStore.mappingPreview = null
-    const { appStore } = await import('./useAppStore.ts')
     appStore.error = `Mapping 预览加载失败：${err.message}`
   }
 }
 
 export async function runOsmMapping(): Promise<void> {
-  const { appStore } = await import('./useAppStore.ts')
   appStore.loading = true
   appStore.error = ''
   appStore.notice = ''

@@ -9,7 +9,7 @@ import type {
   SegmentRuleCondition,
   SegmentSummary
 } from '../types.ts'
-import { request } from './useAppStore.ts'
+import { request, appStore } from './appContext.ts'
 import { normalizePageResult, emptyPageResult, pageQuery, boundedPage } from './useCustomerStore.ts'
 
 export const useSegmentStore = defineStore('segment', {
@@ -80,7 +80,6 @@ export async function loadSegmentSummary(): Promise<void> {
     segmentStore.segmentSummary = await request('/api/segments/summary')
   } catch (error) {
     segmentStore.segmentSummary = null
-    const { appStore } = await import('./useAppStore.ts')
     appStore.error = `客群统计加载失败：${error.message}`
   }
 }
@@ -98,7 +97,6 @@ export async function loadSegments(page = segmentStore.segmentPage.page): Promis
     const err = error as { message?: string }
     segmentStore.segments = []
     segmentStore.segmentPage = emptyPageResult<Segment>(0, segmentStore.segmentPage.size)
-    const { appStore } = await import('./useAppStore.ts')
     appStore.error = `客群加载失败：${err.message}`
   }
 }
@@ -114,13 +112,11 @@ export async function loadSegmentMembers(segmentId = segmentStore.selectedSegmen
     const err = error as { message?: string }
     segmentStore.segmentMembers = []
     segmentStore.segmentMemberPage = emptyPageResult<Customer>(0, segmentStore.segmentMemberPage.size)
-    const { appStore } = await import('./useAppStore.ts')
     appStore.error = `客群成员加载失败：${err.message}`
   }
 }
 
 export async function saveSegment(): Promise<void> {
-  const { appStore } = await import('./useAppStore.ts')
   appStore.loading = true
   appStore.error = ''
   appStore.notice = ''
@@ -141,8 +137,35 @@ export async function saveSegment(): Promise<void> {
   }
 }
 
+export async function deleteSegment(segmentId = segmentStore.selectedSegment?.id): Promise<void> {
+  if (!segmentId) {
+    appStore.error = '请先选择客群'
+    return
+  }
+  appStore.loading = true
+  appStore.error = ''
+  appStore.notice = ''
+  try {
+    await request(`/api/segments/${segmentId}`, { method: 'DELETE' })
+    appStore.notice = '客群已删除'
+    const nextPage = segmentStore.segmentPage.page
+    segmentStore.selectedSegment = null
+    segmentStore.segmentMembers = []
+    segmentStore.segmentMemberPage = emptyPageResult<Customer>(0, segmentStore.segmentMemberPage.size)
+    segmentStore.segmentRefreshResult = null
+    await loadSegments(nextPage)
+    if (segmentStore.segmentPage.totalPages > 0 && segmentStore.segmentPage.page >= segmentStore.segmentPage.totalPages) {
+      await loadSegments(segmentStore.segmentPage.totalPages - 1)
+    }
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    appStore.error = `客群删除失败：${err.message}`
+  } finally {
+    appStore.loading = false
+  }
+}
+
 export async function refreshSegment(segmentId = segmentStore.selectedSegment?.id): Promise<void> {
-  const { appStore } = await import('./useAppStore.ts')
   if (!segmentId) {
     appStore.error = '请先选择客群'
     return

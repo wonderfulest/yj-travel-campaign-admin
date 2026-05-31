@@ -82,7 +82,7 @@
 </template>
 <script setup lang="ts">
 import { Layers, Pencil, Plus, RefreshCw } from 'lucide-vue-next'
-import * as admin from '../../state/adminApp'
+import * as admin from '../../state/index'
 
 const {
   state,

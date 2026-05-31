@@ -55,7 +55,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { X } from 'lucide-vue-next'
-import * as admin from '../../state/adminApp'
+import * as admin from '../../state/index'
 
 interface CountryValue {
   id: string

@@ -16,7 +16,7 @@
     </section>
 </template>
 <script setup lang="ts">
-import * as admin from '../../state/adminApp'
+import * as admin from '../../state/index'
 
 const { stats, canAccessNav, openStatTarget } = admin
 </script>

@@ -100,7 +100,7 @@
 </template>
 <script setup lang="ts">
 import { CheckCircle2, Plus, Send, Trash2, X } from 'lucide-vue-next'
-import * as admin from '../../state/adminApp'
+import * as admin from '../../state/index'
 
 const {
   state,

@@ -82,7 +82,7 @@ import SegmentsView from './views/segments/SegmentsView.vue'
 import SettingsView from './views/settings/SettingsView.vue'
 import StatGrid from './components/common/StatGrid.vue'
 import TrackingView from './views/tracking/TrackingView.vue'
-import * as admin from './state/adminApp'
+import * as admin from './state/index'
 import { navToPath } from './navigation'
 
 const route = useRoute()

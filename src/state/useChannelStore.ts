@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import type { AwsSesForm, Channel, SmtpForm } from '../types.ts'
-import { request } from './useAppStore.ts'
+import { request, appStore } from './appContext.ts'
 import { normalizePageResult, emptyPageResult, pageQuery, boundedPage } from './useCustomerStore.ts'
 
 export const useChannelStore = defineStore('channel', {
@@ -50,13 +50,11 @@ export async function loadChannels(page = channelStore.channelPage.page): Promis
     const err = error as { message?: string }
     channelStore.channels = []
     channelStore.channelPage = normalizePageResult<Channel>([], [], 0, channelStore.channelPage.size)
-    const { appStore } = await import('./useAppStore.ts')
     appStore.error = `推送通道加载失败：${err.message}`
   }
 }
 
 export async function createChannel(): Promise<void> {
-  const { appStore } = await import('./useAppStore.ts')
   appStore.loading = true
   appStore.error = ''
   appStore.notice = ''

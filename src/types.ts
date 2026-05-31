@@ -250,6 +250,7 @@ export interface SegmentSummary {
 
 export interface SegmentRefreshResult {
   matchedCount: number
+  excludedCount?: number
 }
 
 // ==================== 邮件活动 ====================
@@ -404,4 +405,3 @@ export interface DictionaryState {
   loading: boolean
   error: string
 }
-

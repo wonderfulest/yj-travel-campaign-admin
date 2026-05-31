@@ -163,7 +163,7 @@
 </template>
 <script setup lang="ts">
 import { BarChart3, CheckCircle2, ExternalLink, Eye, Layers, RefreshCw, Users } from 'lucide-vue-next'
-import * as admin from '../../state/adminApp'
+import * as admin from '../../state/index'
 
 const {
   state,

@@ -34,6 +34,9 @@
                   <RefreshCw :size="14" />
                   刷新成员
                 </button>
+                <button class="row-action danger" type="button" :disabled="state.loading" @click="confirmDeleteSegment(segment)">
+                  删除
+                </button>
               </td>
             </tr>
           </tbody>
@@ -67,7 +70,7 @@
         </div>
         <div v-if="state.segmentRefreshResult" class="segment-refresh-summary">
           <span>命中 {{ state.segmentRefreshResult.matchedCount }}</span>
-          <span>排除 {{ state.segmentRefreshResult.excludedCount }}</span>
+          <span>排除 {{ state.segmentRefreshResult.excludedCount ?? 0 }}</span>
         </div>
       </div>
       <div class="data-table compact-table">
@@ -183,7 +186,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { RefreshCw } from 'lucide-vue-next'
-import * as admin from '../../state/adminApp'
+import * as admin from '../../state/index'
+import type { Segment } from '../../types'
 import CountryMultiSelect from '../../components/common/CountryMultiSelect.vue'
 
 const {
@@ -200,6 +204,7 @@ const {
   jumpSegmentMemberPage,
   changeSegmentMemberPage,
   saveSegment,
+  deleteSegment,
   RULE_FIELDS: ruleFields,
   RULE_OPS: ruleOps,
   ruleOpHasValue,
@@ -220,7 +225,7 @@ function closeSegmentEditor() {
   segmentEditorOpen.value = false
 }
 
-function openSegmentEditor(segment) {
+function openSegmentEditor(segment: Segment) {
   fillSegmentForm(segment)
   segmentEditorOpen.value = true
 }
@@ -230,5 +235,11 @@ async function submitSegment() {
   if (!state.error) {
     segmentEditorOpen.value = false
   }
+}
+
+async function confirmDeleteSegment(segment: Segment) {
+  const confirmed = window.confirm(`确认删除客群「${segment.name}」吗？此操作会同时清理成员关系。`)
+  if (!confirmed) return
+  await deleteSegment(segment.id)
 }
 </script>

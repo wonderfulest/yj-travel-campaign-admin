@@ -49,7 +49,7 @@
 import { RouterLink } from 'vue-router'
 import { Mail, PanelLeftClose, PanelLeftOpen } from 'lucide-vue-next'
 import { navToPath } from '../navigation'
-import * as admin from '../state/adminApp'
+import * as admin from '../state/index'
 
 const {
   state,

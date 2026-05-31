@@ -148,7 +148,7 @@
 </template>
 <script setup lang="ts">
 import { CheckCircle2, Globe2, Layers, Send } from 'lucide-vue-next'
-import * as admin from '../../state/adminApp'
+import * as admin from '../../state/index'
 
 const {
   customerQualityStats,

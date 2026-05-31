@@ -41,7 +41,7 @@
 </template>
 <script setup lang="ts">
 import { KeyRound, Mail } from 'lucide-vue-next'
-import * as admin from '../../state/adminApp'
+import * as admin from '../../state/index'
 
 const { state, login } = admin
 </script>

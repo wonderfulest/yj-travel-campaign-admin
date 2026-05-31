@@ -1196,6 +1196,18 @@ td span {
   background: #dff5f1;
 }
 
+.row-action.danger {
+  border-color: #f1c3c9;
+  color: #9f1239;
+  background: #fff1f2;
+}
+
+.row-action.danger:hover,
+.row-action.danger:focus-visible {
+  border-color: #f08ea0;
+  background: #ffe4e8;
+}
+
 .row-action:focus-visible {
   outline: 3px solid rgba(15, 118, 110, 0.18);
   outline-offset: 2px;

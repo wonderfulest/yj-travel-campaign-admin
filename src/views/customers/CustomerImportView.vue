@@ -30,7 +30,7 @@
 </template>
 <script setup lang="ts">
 import { FileUp, Globe2 } from 'lucide-vue-next'
-import * as admin from '../../state/adminApp'
+import * as admin from '../../state/index'
 
 const {
   state,

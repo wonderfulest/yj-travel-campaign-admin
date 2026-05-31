@@ -15,7 +15,7 @@
 </template>
 <script setup lang="ts">
 import { LogOut, ShieldCheck } from 'lucide-vue-next'
-import * as admin from '../state/adminApp'
+import * as admin from '../state/index'
 
 const {
   state,

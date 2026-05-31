@@ -82,7 +82,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import * as admin from '../../state/adminApp'
+import * as admin from '../../state/index'
 
 interface LocationValue {
   country: string
