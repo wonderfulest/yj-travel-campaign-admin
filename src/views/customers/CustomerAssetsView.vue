@@ -450,11 +450,10 @@
             <label
               >官网 <input v-model="state.customerEditForm.website"
             /></label>
-            <label
-              >国家
-              <input v-model="state.customerEditForm.country" placeholder="DE"
-            /></label>
-            <label>城市 <input v-model="state.customerEditForm.city" /></label>
+            <LocationSelect
+              v-model="locationValue"
+              :disabled="state.loading"
+            />
             <label
               >邮编 <input v-model="state.customerEditForm.postcode"
             /></label>
@@ -525,6 +524,18 @@ import {
 } from "lucide-vue-next";
 import * as admin from "../../state/adminApp";
 import LocationSelect from "../../components/common/LocationSelect.vue";
+import { computed } from "vue";
+
+const locationValue = computed({
+  get: () => ({
+    country: state.customerEditForm.country || "",
+    city: state.customerEditForm.city || "",
+  }),
+  set: (val) => {
+    state.customerEditForm.country = val.country;
+    state.customerEditForm.city = val.city;
+  },
+});
 
 const {
   state,
