@@ -99,29 +99,28 @@
         </div>
 </template>
 <script setup lang="ts">
+import { proxyRefs } from 'vue'
+import { storeToRefs } from 'pinia'
 import { CheckCircle2, Plus, Send, Trash2, X } from 'lucide-vue-next'
-import { useAdminState } from '../../state/adminState'
-import * as app from '../../state/useAppStore'
-import * as customer from '../../state/useCustomerStore'
-import * as channel from '../../state/useChannelStore'
-import * as segment from '../../state/useSegmentStore'
-import * as campaign from '../../state/useCampaignStore'
-import * as tracking from '../../state/useTrackingStore'
-import * as ui from '../../state/useUiStore'
-
-const state = useAdminState()
-const admin = { state, ...app, ...customer, ...channel, ...segment, ...campaign, ...tracking, ...ui }
-
-const {
-  saveCampaignTrackingLink,
-  closeTrackingLinkDialog,
-  closeTestEmailDialog,
+import { useAppStore } from '../../state/useAppStore'
+import {
   addTestEmail,
-  isTestEmailSelected,
-  toggleTestEmail,
-  deleteTestEmail,
-  confirmTestSimulation,
   closeFinalConfirmDialog,
-  confirmFinalPush
-} = admin
+  closeTestEmailDialog,
+  closeTrackingLinkDialog,
+  confirmFinalPush,
+  confirmTestSimulation,
+  deleteTestEmail,
+  isTestEmailSelected,
+  saveCampaignTrackingLink,
+  toggleTestEmail,
+  useCampaignStore
+} from '../../state/useCampaignStore'
+
+const appStore = useAppStore()
+const campaignStore = useCampaignStore()
+const state = proxyRefs({
+  ...storeToRefs(appStore),
+  ...storeToRefs(campaignStore)
+})
 </script>

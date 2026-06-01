@@ -2,7 +2,23 @@ export const ACTIVE_NAV_STORAGE_KEY = 'travel_admin_active_nav'
 export const CUSTOMER_TOOL_STORAGE_KEY = 'travel_admin_customer_tool'
 export const ADMIN_NAV_QUERY_KEY = 'nav'
 
-export const CUSTOMER_TOOLS = new Set(['list', 'imports', 'mapping'])
+export type CustomerToolKey = 'list' | 'imports' | 'mapping'
+export type NavKey =
+  | 'dashboard'
+  | 'customers'
+  | 'channels'
+  | 'segments'
+  | 'campaign-list'
+  | 'campaigns'
+  | 'tracking'
+  | 'settings'
+
+export interface NavigationState {
+  nav: NavKey
+  customerTool: CustomerToolKey
+}
+
+export const CUSTOMER_TOOLS = new Set<CustomerToolKey>(['list', 'imports', 'mapping'])
 export const ADMIN_NAV_KEYS = new Set([
   'dashboard',
   'customers',
@@ -12,21 +28,21 @@ export const ADMIN_NAV_KEYS = new Set([
   'campaigns',
   'tracking',
   'settings'
-])
+] as NavKey[])
 
-export function isKnownNav(nav) {
-  return ADMIN_NAV_KEYS.has(nav)
+export function isKnownNav(nav: unknown): nav is NavKey {
+  return ADMIN_NAV_KEYS.has(nav as NavKey)
 }
 
-export function isKnownCustomerTool(tool) {
-  return CUSTOMER_TOOLS.has(tool)
+export function isKnownCustomerTool(tool: unknown): tool is CustomerToolKey {
+  return CUSTOMER_TOOLS.has(tool as CustomerToolKey)
 }
 
-export function normalizeCustomerTool(tool) {
+export function normalizeCustomerTool(tool: unknown): CustomerToolKey {
   return isKnownCustomerTool(tool) ? tool : 'list'
 }
 
-export function navToPath(nav, customerTool = 'list') {
+export function navToPath(nav: unknown, customerTool: CustomerToolKey = 'list'): string {
   if (!isKnownNav(nav)) return '/dashboard'
   if (nav === 'customers') {
     if (customerTool === 'imports') return '/customers/imports'
@@ -36,7 +52,7 @@ export function navToPath(nav, customerTool = 'list') {
   return `/${nav}`
 }
 
-export function resolveNavigationFromLocation(pathname = '/', queryNav = '') {
+export function resolveNavigationFromLocation(pathname = '/', queryNav = ''): NavigationState {
   if (isKnownNav(queryNav)) {
     return {
       nav: queryNav,

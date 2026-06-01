@@ -13,7 +13,7 @@
           <button :class="{active: authMode === 'login'}" @click="authMode = 'login'">登录</button>
           <button :class="{active: authMode === 'register'}" @click="authMode = 'register'">注册租户</button>
         </div>
-        <form class="auth-form" @submit.prevent="login()">
+        <form class="auth-form" @submit.prevent="login">
           <label v-if="authMode === 'register'">
             租户名称
             <input v-model="authForm.tenantName" autocomplete="organization" />
@@ -46,5 +46,8 @@ import { useAppStore } from '../../state/useAppStore'
 
 const appStore = useAppStore()
 const { authMode, authForm, loading, error } = storeToRefs(appStore)
-const { login } = appStore
+
+async function login(): Promise<void> {
+  await appStore.login()
+}
 </script>

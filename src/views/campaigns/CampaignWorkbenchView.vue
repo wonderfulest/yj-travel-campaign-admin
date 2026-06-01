@@ -206,48 +206,55 @@
         </section>
 </template>
 <script setup lang="ts">
+import { proxyRefs } from 'vue'
+import { storeToRefs } from 'pinia'
 import { CheckCircle2, ChevronDown, Code2, ExternalLink, Eye, Layers, Plus, Send, Trash2, X } from 'lucide-vue-next'
-import { useAdminState } from '../../state/adminState'
-import * as app from '../../state/useAppStore'
-import * as customer from '../../state/useCustomerStore'
-import * as channel from '../../state/useChannelStore'
-import * as segment from '../../state/useSegmentStore'
-import * as campaign from '../../state/useCampaignStore'
-import * as tracking from '../../state/useTrackingStore'
-import * as ui from '../../state/useUiStore'
-
-const state = useAdminState()
-const admin = { state, ...app, ...customer, ...channel, ...segment, ...campaign, ...tracking, ...ui }
-
-const {
-  canAccessNav,
-  EMPTY_TEMPLATE_PREVIEW_HTML: emptyTemplatePreviewHtml,
-  REQUIRED_TRACKING_LINK_MESSAGE: requiredTrackingLinkMessage,
+import { canAccessNav as canAccessAppNav, useAppStore } from '../../state/useAppStore'
+import { useChannelStore } from '../../state/useChannelStore'
+import {
+  addTemplateVariable,
+  advanceCampaignStep,
+  campaignAdvanceButtonLabel,
+  campaignAdvanceTitle,
   campaignCurrentStatusLabel,
   campaignLifecycleView,
-  campaignAdvanceButtonLabel,
-  templateMissingTrackingLinkParam,
-  editableTemplateVariableRows,
-  openCampaignList,
-  saveCampaignSetup,
-  syncCampaignTemplateVariables,
-  selectedCampaignSegments,
-  removeCampaignSegment,
-  filteredCampaignSegments,
-  isCampaignSegmentSelected,
-  toggleCampaignSegment,
-  createCampaign,
-  previewCampaignTemplate,
-  isCampaignStepDisabled,
   campaignStepTitle,
-  rollbackCampaignStep,
-  isCampaignAdvanceDisabled,
-  campaignAdvanceTitle,
-  advanceCampaignStep,
-  copyShortLink,
-  openTrackingLinkDialog,
+  createCampaign,
+  editableTemplateVariableRows,
+  EMPTY_TEMPLATE_PREVIEW_HTML as emptyTemplatePreviewHtml,
+  filteredCampaignSegments,
   insertTemplateVariable,
+  isCampaignSegmentSelected,
+  isCampaignAdvanceDisabled,
+  isCampaignStepDisabled,
+  openTrackingLinkDialog,
+  previewCampaignTemplate,
+  removeCampaignSegment,
   removeTemplateVariable,
-  addTemplateVariable
-} = admin
+  REQUIRED_TRACKING_LINK_MESSAGE as requiredTrackingLinkMessage,
+  rollbackCampaignStep,
+  saveCampaignSetup,
+  selectedCampaignSegments,
+  syncCampaignTemplateVariables,
+  templateMissingTrackingLinkParam,
+  toggleCampaignSegment,
+  useCampaignStore
+} from '../../state/useCampaignStore'
+import { useSegmentStore } from '../../state/useSegmentStore'
+import { copyShortLink, openCampaignList } from '../../state/useUiStore'
+
+const appStore = useAppStore()
+const campaignStore = useCampaignStore()
+const channelStore = useChannelStore()
+const segmentStore = useSegmentStore()
+const state = proxyRefs({
+  ...storeToRefs(appStore),
+  ...storeToRefs(campaignStore),
+  ...storeToRefs(channelStore),
+  ...storeToRefs(segmentStore)
+})
+
+function canAccessNav(nav: string): boolean {
+  return canAccessAppNav(nav, appStore)
+}
 </script>

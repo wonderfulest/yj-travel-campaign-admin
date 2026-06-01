@@ -1,9 +1,8 @@
 import { defineStore } from 'pinia'
-import { pinia } from './pinia.ts'
-import type { AwsSesForm, Channel, SmtpForm } from '../types.ts'
-import { channelsApi } from '../api/channels.ts'
-import { appStore } from './useAppStore.ts'
-import { boundedPage, normalizePageResult, pageQuery } from '../utils/pagination.ts'
+import type { AwsSesForm, Channel, SmtpForm } from '../types'
+import { channelsApi } from '../api/channels'
+import { useAppStore } from './useAppStore'
+import { boundedPage, normalizePageResult, pageQuery } from '../utils/pagination'
 
 function defaultSmtpForm(): SmtpForm {
   return {
@@ -50,28 +49,31 @@ export const useChannelStore = defineStore('channel', {
   })
 })
 
-export const channelStore = useChannelStore(pinia)
+const channelState = () => useChannelStore()
+const appState = () => useAppStore()
 
-export async function loadChannels(page = channelStore.channelPage.page): Promise<void> {
+export async function loadChannels(page = channelState().channelPage.page): Promise<void> {
   try {
-    const result = await channelsApi.list(pageQuery(channelStore.channelPage, page))
-    const pageResult = normalizePageResult<Channel>(result, [], page, channelStore.channelPage.size)
-    channelStore.channels = pageResult.items
-    channelStore.channelPage = pageResult
+    const result = await channelsApi.list(pageQuery(channelState().channelPage, page))
+    const pageResult = normalizePageResult<Channel>(result, [], page, channelState().channelPage.size)
+    channelState().channels = pageResult.items
+    channelState().channelPage = pageResult
   } catch (error: unknown) {
     const err = error as { message?: string }
-    channelStore.channels = []
-    channelStore.channelPage = normalizePageResult<Channel>([], [], 0, channelStore.channelPage.size)
-    appStore.error = `推送通道加载失败：${err.message}`
+    channelState().channels = []
+    channelState().channelPage = normalizePageResult<Channel>([], [], 0, channelState().channelPage.size)
+    appState().error = `推送通道加载失败：${err.message}`
   }
 }
 
 export async function saveChannel(): Promise<void> {
+  const appStore = appState()
+  const channelStore = channelState()
   appStore.loading = true
   appStore.error = ''
   appStore.notice = ''
   try {
-    const isSmtp = channelStore.channelType === 'smtp'
+    const isSmtp = channelState().channelType === 'smtp'
     const payload = isSmtp
       ? { ...channelStore.smtpForm, smtpPort: Number(channelStore.smtpForm.smtpPort) }
       : channelStore.awsSesForm
@@ -97,6 +99,8 @@ export async function saveChannel(): Promise<void> {
 export const createChannel = saveChannel
 
 export function editChannel(channel: Channel): void {
+  const appStore = appState()
+  const channelStore = channelState()
   appStore.error = ''
   appStore.notice = ''
   channelStore.editingChannelId = channel.id
@@ -130,47 +134,47 @@ export function editChannel(channel: Channel): void {
 }
 
 export function cancelChannelEdit(): void {
-  channelStore.editingChannelId = null
-  channelStore.editingChannelType = null
-  channelStore.channelType = 'smtp'
-  channelStore.smtpForm = defaultSmtpForm()
-  channelStore.awsSesForm = defaultAwsSesForm()
+  channelState().editingChannelId = null
+  channelState().editingChannelType = null
+  channelState().channelType = 'smtp'
+  channelState().smtpForm = defaultSmtpForm()
+  channelState().awsSesForm = defaultAwsSesForm()
 }
 
 export async function deleteChannel(channel: Channel): Promise<void> {
   if (!window.confirm(`确认删除推送通道「${channel.name}」？`)) return
-  appStore.loading = true
-  appStore.error = ''
-  appStore.notice = ''
+  appState().loading = true
+  appState().error = ''
+  appState().notice = ''
   try {
     await channelsApi.remove(channel)
-    const nextPage = channelStore.channels.length === 1 && channelStore.channelPage.page > 0
-      ? channelStore.channelPage.page - 1
-      : channelStore.channelPage.page
+    const nextPage = channelState().channels.length === 1 && channelState().channelPage.page > 0
+      ? channelState().channelPage.page - 1
+      : channelState().channelPage.page
     await loadChannels(nextPage)
-    appStore.notice = '推送通道已删除'
+    appState().notice = '推送通道已删除'
   } catch (error: unknown) {
     const err = error as { message?: string }
-    appStore.error = `通道删除失败：${err.message}`
+    appState().error = `通道删除失败：${err.message}`
   } finally {
-    appStore.loading = false
+    appState().loading = false
   }
 }
 
 export function changeChannelPage(nextPage: number): void {
-  if (nextPage < 0 || (channelStore.channelPage.totalPages && nextPage >= channelStore.channelPage.totalPages)) return
+  if (nextPage < 0 || (channelState().channelPage.totalPages && nextPage >= channelState().channelPage.totalPages)) return
   loadChannels(nextPage)
 }
 
 export function jumpChannelPage(pageNumber: number | string): void {
-  const nextPage = boundedPage(channelStore.channelPage, pageNumber)
-  if (nextPage === null || nextPage === channelStore.channelPage.page) return
+  const nextPage = boundedPage(channelState().channelPage, pageNumber)
+  if (nextPage === null || nextPage === channelState().channelPage.page) return
   loadChannels(nextPage)
 }
 
 export function changeChannelPageSize(size: number | string): void {
   const nextSize = Number(size)
   if (!nextSize) return
-  channelStore.channelPage.size = nextSize
+  channelState().channelPage.size = nextSize
   loadChannels(0)
 }

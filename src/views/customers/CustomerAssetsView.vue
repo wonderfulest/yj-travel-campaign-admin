@@ -156,7 +156,7 @@
   </section>
 </template>
 <script setup lang="ts">
-import { onMounted, proxyRefs } from 'vue'
+import { proxyRefs } from 'vue'
 import { storeToRefs } from 'pinia'
 import {
   Eye,
@@ -186,9 +186,5 @@ const customerStore = useCustomerStore()
 const state = proxyRefs({
   ...storeToRefs(appStore),
   ...storeToRefs(customerStore)
-})
-
-onMounted(() => {
-  void loadCustomers()
 })
 </script>

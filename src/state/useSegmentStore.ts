@@ -1,6 +1,5 @@
 import { computed } from 'vue'
 import { defineStore } from 'pinia'
-import { pinia } from './pinia.ts'
 import type {
   CustomerSegmentMember,
   Segment,
@@ -9,10 +8,10 @@ import type {
   SegmentRule,
   SegmentRuleCondition,
   SegmentSummary
-} from '../types.ts'
-import { segmentsApi } from '../api/segments.ts'
-import { appStore } from './useAppStore.ts'
-import { boundedPage, emptyPageResult, normalizePageResult, pageQuery } from '../utils/pagination.ts'
+} from '../types'
+import { segmentsApi } from '../api/segments'
+import { useAppStore } from './useAppStore'
+import { boundedPage, emptyPageResult, normalizePageResult, pageQuery } from '../utils/pagination'
 
 export const useSegmentStore = defineStore('segment', {
   state: () => ({
@@ -46,9 +45,10 @@ export const useSegmentStore = defineStore('segment', {
   })
 })
 
-export const segmentStore = useSegmentStore(pinia)
+const segmentState = () => useSegmentStore()
+const appState = () => useAppStore()
 
-export const segmentReadinessStats = computed(() => segmentStore.segmentSummary || summarizeSegments(segmentStore.segments))
+export const segmentReadinessStats = computed(() => segmentState().segmentSummary || summarizeSegments(segmentState().segments))
 
 export const segmentReadinessBars = computed(() => {
   const segments = Array.isArray(segmentReadinessStats.value?.topSegments) ? segmentReadinessStats.value.topSegments : []
@@ -79,113 +79,113 @@ export function summarizeSegments(segments: Segment[]): SegmentSummary {
 
 export async function loadSegmentSummary(): Promise<void> {
   try {
-    segmentStore.segmentSummary = await segmentsApi.summary() as SegmentSummary
+    segmentState().segmentSummary = await segmentsApi.summary() as SegmentSummary
   } catch (error) {
-    segmentStore.segmentSummary = null
-    appStore.error = `客群统计加载失败：${error.message}`
+    segmentState().segmentSummary = null
+    appState().error = `客群统计加载失败：${error.message}`
   }
 }
 
-export async function loadSegments(page = segmentStore.segmentPage.page): Promise<void> {
+export async function loadSegments(page = segmentState().segmentPage.page): Promise<void> {
   try {
-    const result = await segmentsApi.list(pageQuery(segmentStore.segmentPage, page))
-    const pageResult = normalizePageResult<Segment>(result, [], page, segmentStore.segmentPage.size)
-    segmentStore.segments = pageResult.items
-    segmentStore.segmentPage = pageResult
-    if (!segmentStore.selectedSegment && pageResult.items.length) {
+    const result = await segmentsApi.list(pageQuery(segmentState().segmentPage, page))
+    const pageResult = normalizePageResult<Segment>(result, [], page, segmentState().segmentPage.size)
+    segmentState().segments = pageResult.items
+    segmentState().segmentPage = pageResult
+    if (!segmentState().selectedSegment && pageResult.items.length) {
       fillSegmentForm(pageResult.items[0])
     }
   } catch (error: unknown) {
     const err = error as { message?: string }
-    segmentStore.segments = []
-    segmentStore.segmentPage = emptyPageResult<Segment>(0, segmentStore.segmentPage.size)
-    appStore.error = `客群加载失败：${err.message}`
+    segmentState().segments = []
+    segmentState().segmentPage = emptyPageResult<Segment>(0, segmentState().segmentPage.size)
+    appState().error = `客群加载失败：${err.message}`
   }
 }
 
-export async function loadSegmentMembers(segmentId = segmentStore.selectedSegment?.id, page = segmentStore.segmentMemberPage.page): Promise<void> {
+export async function loadSegmentMembers(segmentId = segmentState().selectedSegment?.id, page = segmentState().segmentMemberPage.page): Promise<void> {
   if (!segmentId) return
   try {
-    const result = await segmentsApi.members(segmentId, pageQuery(segmentStore.segmentMemberPage, page))
-    const pageResult = normalizePageResult<CustomerSegmentMember>(result, [], page, segmentStore.segmentMemberPage.size)
-    segmentStore.segmentMembers = pageResult.items
-    segmentStore.segmentMemberPage = pageResult
+    const result = await segmentsApi.members(segmentId, pageQuery(segmentState().segmentMemberPage, page))
+    const pageResult = normalizePageResult<CustomerSegmentMember>(result, [], page, segmentState().segmentMemberPage.size)
+    segmentState().segmentMembers = pageResult.items
+    segmentState().segmentMemberPage = pageResult
   } catch (error: unknown) {
     const err = error as { message?: string }
-    segmentStore.segmentMembers = []
-    segmentStore.segmentMemberPage = emptyPageResult<CustomerSegmentMember>(0, segmentStore.segmentMemberPage.size)
-    appStore.error = `客群成员加载失败：${err.message}`
+    segmentState().segmentMembers = []
+    segmentState().segmentMemberPage = emptyPageResult<CustomerSegmentMember>(0, segmentState().segmentMemberPage.size)
+    appState().error = `客群成员加载失败：${err.message}`
   }
 }
 
 export async function saveSegment(): Promise<void> {
-  appStore.loading = true
-  appStore.error = ''
-  appStore.notice = ''
+  appState().loading = true
+  appState().error = ''
+  appState().notice = ''
   try {
-    const isUpdate = Boolean(segmentStore.segmentForm.id)
-    const result = await segmentsApi.save(segmentStore.segmentForm.id, segmentPayload())
-    appStore.notice = isUpdate ? '客群规则已更新' : '客群已创建'
+    const isUpdate = Boolean(segmentState().segmentForm.id)
+    const result = await segmentsApi.save(segmentState().segmentForm.id, segmentPayload())
+    appState().notice = isUpdate ? '客群规则已更新' : '客群已创建'
     await loadSegments()
     fillSegmentForm(result)
   } catch (error: unknown) {
     const err = error as { message?: string }
-    appStore.error = `客群保存失败：${err.message}`
+    appState().error = `客群保存失败：${err.message}`
   } finally {
-    appStore.loading = false
+    appState().loading = false
   }
 }
 
-export async function deleteSegment(segmentId = segmentStore.selectedSegment?.id): Promise<void> {
+export async function deleteSegment(segmentId = segmentState().selectedSegment?.id): Promise<void> {
   if (!segmentId) {
-    appStore.error = '请先选择客群'
+    appState().error = '请先选择客群'
     return
   }
-  appStore.loading = true
-  appStore.error = ''
-  appStore.notice = ''
+  appState().loading = true
+  appState().error = ''
+  appState().notice = ''
   try {
     await segmentsApi.remove(segmentId)
-    appStore.notice = '客群已删除'
-    const nextPage = segmentStore.segmentPage.page
-    segmentStore.selectedSegment = null
-    segmentStore.segmentMembers = []
-    segmentStore.segmentMemberPage = emptyPageResult<CustomerSegmentMember>(0, segmentStore.segmentMemberPage.size)
-    segmentStore.segmentRefreshResult = null
+    appState().notice = '客群已删除'
+    const nextPage = segmentState().segmentPage.page
+    segmentState().selectedSegment = null
+    segmentState().segmentMembers = []
+    segmentState().segmentMemberPage = emptyPageResult<CustomerSegmentMember>(0, segmentState().segmentMemberPage.size)
+    segmentState().segmentRefreshResult = null
     await loadSegments(nextPage)
-    if (segmentStore.segmentPage.totalPages > 0 && segmentStore.segmentPage.page >= segmentStore.segmentPage.totalPages) {
-      await loadSegments(segmentStore.segmentPage.totalPages - 1)
+    if (segmentState().segmentPage.totalPages > 0 && segmentState().segmentPage.page >= segmentState().segmentPage.totalPages) {
+      await loadSegments(segmentState().segmentPage.totalPages - 1)
     }
   } catch (error: unknown) {
     const err = error as { message?: string }
-    appStore.error = `客群删除失败：${err.message}`
+    appState().error = `客群删除失败：${err.message}`
   } finally {
-    appStore.loading = false
+    appState().loading = false
   }
 }
 
-export async function refreshSegment(segmentId = segmentStore.selectedSegment?.id): Promise<void> {
+export async function refreshSegment(segmentId = segmentState().selectedSegment?.id): Promise<void> {
   if (!segmentId) {
-    appStore.error = '请先选择客群'
+    appState().error = '请先选择客群'
     return
   }
-  appStore.loading = true
-  appStore.error = ''
-  appStore.notice = ''
+  appState().loading = true
+  appState().error = ''
+  appState().notice = ''
   try {
-    segmentStore.segmentRefreshResult = await segmentsApi.refresh(segmentId)
+    segmentState().segmentRefreshResult = await segmentsApi.refresh(segmentId)
     await loadSegmentMembers(segmentId, 0)
-    appStore.notice = `客群已刷新，命中 ${segmentStore.segmentRefreshResult.matchedCount} 个客户`
+    appState().notice = `客群已刷新，命中 ${segmentState().segmentRefreshResult.matchedCount} 个客户`
   } catch (error: unknown) {
     const err = error as { message?: string }
-    appStore.error = `客群刷新失败：${err.message}`
+    appState().error = `客群刷新失败：${err.message}`
   } finally {
-    appStore.loading = false
+    appState().loading = false
   }
 }
 
 export function fillSegmentForm(segment: Segment): void {
-  segmentStore.selectedSegment = segment
+  segmentState().selectedSegment = segment
   let rules: SegmentRuleCondition[] = []
   if (segment.rules?.conditions) {
     rules = segment.rules.conditions.map((c) => ({
@@ -194,7 +194,7 @@ export function fillSegmentForm(segment: Segment): void {
       _countryValues: c.field === 'country' && Array.isArray(c.values) ? [...c.values] : []
     }))
   }
-  segmentStore.segmentForm = {
+  segmentState().segmentForm = {
     id: segment.id,
     name: segment.name || '',
     description: segment.description || '',
@@ -204,10 +204,10 @@ export function fillSegmentForm(segment: Segment): void {
 }
 
 export function resetSegmentForm(): void {
-  segmentStore.selectedSegment = null
-  segmentStore.segmentMembers = []
-  segmentStore.segmentMemberPage = emptyPageResult<CustomerSegmentMember>(0, segmentStore.segmentMemberPage.size)
-  segmentStore.segmentForm = {
+  segmentState().selectedSegment = null
+  segmentState().segmentMembers = []
+  segmentState().segmentMemberPage = emptyPageResult<CustomerSegmentMember>(0, segmentState().segmentMemberPage.size)
+  segmentState().segmentForm = {
     id: '',
     name: '',
     description: '',
@@ -217,9 +217,9 @@ export function resetSegmentForm(): void {
 
 export function segmentPayload(): { name: string; description: string; rules: SegmentRule | null } {
   return {
-    name: segmentStore.segmentForm.name,
-    description: segmentStore.segmentForm.description,
-    rules: buildRules(segmentStore.segmentForm.rules)
+    name: segmentState().segmentForm.name,
+    description: segmentState().segmentForm.description,
+    rules: buildRules(segmentState().segmentForm.rules)
   }
 }
 
@@ -257,11 +257,11 @@ export function ruleOpHasValue(op: string): boolean {
 }
 
 export function addRule(): void {
-  segmentStore.segmentForm.rules.push({ field: 'country', op: 'IN', values: [], _valueText: '', _countryValues: [] })
+  segmentState().segmentForm.rules.push({ field: 'country', op: 'IN', values: [], _valueText: '', _countryValues: [] })
 }
 
 export function removeRule(index: number): void {
-  segmentStore.segmentForm.rules.splice(index, 1)
+  segmentState().segmentForm.rules.splice(index, 1)
 }
 
 export function buildRules(rules: SegmentRuleCondition[]): SegmentRule | null {
@@ -285,37 +285,37 @@ export function buildRules(rules: SegmentRuleCondition[]): SegmentRule | null {
 }
 
 export function changeSegmentPage(nextPage: number): void {
-  if (nextPage < 0 || (segmentStore.segmentPage.totalPages && nextPage >= segmentStore.segmentPage.totalPages)) return
+  if (nextPage < 0 || (segmentState().segmentPage.totalPages && nextPage >= segmentState().segmentPage.totalPages)) return
   loadSegments(nextPage)
 }
 
 export function jumpSegmentPage(pageNumber: number | string): void {
-  const nextPage = boundedPage(segmentStore.segmentPage, pageNumber)
-  if (nextPage === null || nextPage === segmentStore.segmentPage.page) return
+  const nextPage = boundedPage(segmentState().segmentPage, pageNumber)
+  if (nextPage === null || nextPage === segmentState().segmentPage.page) return
   loadSegments(nextPage)
 }
 
 export function changeSegmentPageSize(size: number | string): void {
   const nextSize = Number(size)
   if (!nextSize) return
-  segmentStore.segmentPage.size = nextSize
+  segmentState().segmentPage.size = nextSize
   loadSegments(0)
 }
 
 export function changeSegmentMemberPage(nextPage: number): void {
-  if (nextPage < 0 || (segmentStore.segmentMemberPage.totalPages && nextPage >= segmentStore.segmentMemberPage.totalPages)) return
-  loadSegmentMembers(segmentStore.selectedSegment?.id, nextPage)
+  if (nextPage < 0 || (segmentState().segmentMemberPage.totalPages && nextPage >= segmentState().segmentMemberPage.totalPages)) return
+  loadSegmentMembers(segmentState().selectedSegment?.id, nextPage)
 }
 
 export function changeSegmentMemberPageSize(size: number | string): void {
   const nextSize = Number(size)
   if (!nextSize) return
-  segmentStore.segmentMemberPage.size = nextSize
-  loadSegmentMembers(segmentStore.selectedSegment?.id, 0)
+  segmentState().segmentMemberPage.size = nextSize
+  loadSegmentMembers(segmentState().selectedSegment?.id, 0)
 }
 
 export function jumpSegmentMemberPage(pageNumber: number | string): void {
-  const nextPage = boundedPage(segmentStore.segmentMemberPage, pageNumber)
-  if (nextPage === null || nextPage === segmentStore.segmentMemberPage.page) return
-  loadSegmentMembers(segmentStore.selectedSegment?.id, nextPage)
+  const nextPage = boundedPage(segmentState().segmentMemberPage, pageNumber)
+  if (nextPage === null || nextPage === segmentState().segmentMemberPage.page) return
+  loadSegmentMembers(segmentState().selectedSegment?.id, nextPage)
 }

@@ -81,7 +81,7 @@
         </section>
 </template>
 <script setup lang="ts">
-import { onMounted, proxyRefs } from 'vue'
+import { proxyRefs } from 'vue'
 import { storeToRefs } from 'pinia'
 import { Layers, Pencil, Plus, RefreshCw } from 'lucide-vue-next'
 import { canAccessNav as canAccessAppNav, useAppStore } from '../../state/useAppStore'
@@ -105,8 +105,4 @@ const state = proxyRefs({
 function canAccessNav(nav: string): boolean {
   return canAccessAppNav(nav, appStore)
 }
-
-onMounted(() => {
-  void loadCampaigns()
-})
 </script>

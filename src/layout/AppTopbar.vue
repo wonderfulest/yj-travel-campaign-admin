@@ -19,12 +19,17 @@ import { useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { LogOut, ShieldCheck } from 'lucide-vue-next'
 import { navItems, useAppStore } from '../state/useAppStore'
+import { replaceWithLogin } from '../navigationActions'
 
 const appStore = useAppStore()
 const { primaryRoleLabel, user } = storeToRefs(appStore)
 
 const route = useRoute()
-const { logout } = appStore
+
+function logout(): void {
+  appStore.logout()
+  replaceWithLogin()
+}
 
 const pageMeta = computed(() => {
   const seg = route.path.replace(/^\//, '').split('/')[0]

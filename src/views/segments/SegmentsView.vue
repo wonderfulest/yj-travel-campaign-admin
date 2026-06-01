@@ -225,55 +225,53 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { proxyRefs, ref } from 'vue'
+import { storeToRefs } from 'pinia'
 import { Eye, MapPin, Pencil, RefreshCw } from 'lucide-vue-next'
-import { useAdminState } from '../../state/adminState'
-import * as app from '../../state/useAppStore'
-import * as customer from '../../state/useCustomerStore'
-import * as channel from '../../state/useChannelStore'
-import * as segment from '../../state/useSegmentStore'
-import * as campaign from '../../state/useCampaignStore'
-import * as tracking from '../../state/useTrackingStore'
-import * as ui from '../../state/useUiStore'
-
-const state = useAdminState()
-const admin = { state, ...app, ...customer, ...channel, ...segment, ...campaign, ...tracking, ...ui }
+import { canAccessNav as canAccessAppNav, useAppStore } from '../../state/useAppStore'
+import {
+  openCustomerDetail,
+  openCustomerEdit
+} from '../../state/useCustomerStore'
+import {
+  addRule,
+  buildRules,
+  changeSegmentMemberPage,
+  changeSegmentMemberPageSize,
+  changeSegmentPage,
+  changeSegmentPageSize,
+  deleteSegment,
+  fillSegmentForm,
+  jumpSegmentMemberPage,
+  jumpSegmentPage,
+  loadSegmentMembers,
+  loadSegments,
+  refreshSegment,
+  removeRule,
+  resetSegmentForm,
+  RULE_FIELDS as ruleFields,
+  RULE_OPS as ruleOps,
+  ruleOpHasValue,
+  ruleOpIsMulti,
+  saveSegment,
+  useSegmentStore
+} from '../../state/useSegmentStore'
+import { formatWebsiteLabel, normalizedWebsiteUrl } from '../../utils/format'
+import { PAGE_SIZE_OPTIONS as pageSizeOptions } from '../../utils/pagination'
 import type { Customer, CustomerSegmentMember, Segment } from '../../types'
 import CountryMultiSelect from '../../components/common/CountryMultiSelect.vue'
 import CustomerAssetDialog from '../../components/customers/CustomerAssetDialog.vue'
 
-const {
-  canAccessNav,
-  PAGE_SIZE_OPTIONS: pageSizeOptions,
-  resetSegmentForm,
-  fillSegmentForm,
-  refreshSegment,
-  loadSegmentMembers,
-  changeSegmentPageSize,
-  jumpSegmentPage,
-  changeSegmentPage,
-  changeSegmentMemberPageSize,
-  jumpSegmentMemberPage,
-  changeSegmentMemberPage,
-  saveSegment,
-  deleteSegment,
-  openCustomerDetail,
-  openCustomerEdit,
-  normalizedWebsiteUrl,
-  formatWebsiteLabel,
-  RULE_FIELDS: ruleFields,
-  RULE_OPS: ruleOps,
-  ruleOpHasValue,
-  ruleOpIsMulti,
-  addRule,
-  removeRule,
-  buildRules,
-  loadSegments
-} = admin
-
-onMounted(() => {
-  void loadSegments()
+const appStore = useAppStore()
+const segmentStore = useSegmentStore()
+const state = proxyRefs({
+  ...storeToRefs(appStore),
+  ...storeToRefs(segmentStore)
 })
+
+function canAccessNav(nav: string): boolean {
+  return canAccessAppNav(nav, appStore)
+}
 
 const segmentEditorOpen = ref(false)
 

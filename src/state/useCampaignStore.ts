@@ -1,11 +1,24 @@
 import { computed, nextTick } from 'vue'
 import { defineStore } from 'pinia'
-import { pinia } from './pinia.ts'
-import type { Campaign, CampaignForm, CampaignStatus, Segment, TestEmail } from '../types.ts'
-import { campaignsApi, type CampaignActionKey } from '../api/campaigns.ts'
-import { appStore } from './useAppStore.ts'
-import { boundedPage, emptyPageResult, normalizePageResult, pageQuery } from '../utils/pagination.ts'
-import { segmentStore } from './useSegmentStore.ts'
+import type { Campaign, CampaignStatus, Segment, TestEmail } from '../types'
+import { campaignsApi, type CampaignActionKey } from '../api/campaigns'
+import { useAppStore } from './useAppStore'
+import { boundedPage, emptyPageResult, normalizePageResult, pageQuery } from '../utils/pagination'
+import { useSegmentStore } from './useSegmentStore'
+import {
+  CAMPAIGN_ACTION_LABELS,
+  CAMPAIGN_LIFECYCLE_STEPS,
+  CAMPAIGN_NEXT_ACTION_BY_STATUS,
+  CAMPAIGN_STATUS_LABELS,
+  DEFAULT_TEMPLATE_VARIABLES,
+  REQUIRED_TRACKING_LINK_MESSAGE,
+  REQUIRED_TRACKING_LINK_PARAM,
+  campaignActionLabel,
+  campaignLifecycleIndex,
+  defaultCampaignForm,
+  normalizedIdList,
+  normalizedTemplateVariables
+} from '../utils/campaignConfig'
 import {
   cloneTemplateVariables,
   parseTemplateVariables,
@@ -13,46 +26,23 @@ import {
   scanTemplateVariableKeys,
   syncTemplateVariables,
   templateVariablesToJson
-} from '../utils/templateVariables.ts'
+} from '../utils/templateVariables'
 
-export const REQUIRED_TRACKING_LINK_PARAM = 'trackingLink'
-export const REQUIRED_TRACKING_LINK_MESSAGE = 'HTML 模板必须包含短链参数 ${trackingLink}'
-export const DEFAULT_TEMPLATE_VARIABLES = [
-  { key: 'customerName', label: '客户名称', sampleValue: 'Reisen Scala', required: true },
-  { key: 'companyName', label: '公司名称', sampleValue: 'Youjie Tech', required: false },
-  { key: REQUIRED_TRACKING_LINK_PARAM, label: '短链', sampleValue: 'https://s.example.com/china-trip-demo', required: true }
-]
-export const EMPTY_TEMPLATE_PREVIEW_HTML = '<!doctype html><html><body style="font-family:Arial,sans-serif;color:#667;margin:24px;">暂无可预览的邮件模板</body></html>'
-
-export const CAMPAIGN_LIFECYCLE_STEPS = [
-  { status: 'DRAFT', label: '配置草稿', hint: '模板、通道、客群' },
-  { status: 'CONFIGURED', label: '模拟发送', hint: '发送到测试邮箱' },
-  { status: 'SIMULATED', label: '生成推送', hint: '记录入库' },
-  { status: 'PREVIEW_GENERATED', label: '确认推送', hint: '开始执行' },
-  { status: 'CONFIRMED', label: '推送完成', hint: '生命周期结束' }
-]
-
-export const CAMPAIGN_STATUS_LABELS = {
-  DRAFT: '配置草稿',
-  CONFIGURED: '模拟发送',
-  SIMULATED: '已模拟发送',
-  PREVIEW_GENERATED: '已生成推送',
-  CONFIRMED: '已确认推送'
-}
-
-export const CAMPAIGN_NEXT_ACTION_BY_STATUS = {
-  DRAFT: 'saveDraft',
-  CONFIGURED: 'simulateSend',
-  SIMULATED: 'prePush',
-  PREVIEW_GENERATED: 'confirm'
-}
-
-export const CAMPAIGN_ACTION_LABELS = {
-  saveDraft: '保存配置',
-  simulateSend: '模拟发送',
-  prePush: '生成推送',
-  confirm: '确认推送'
-}
+export {
+  CAMPAIGN_ACTION_LABELS,
+  CAMPAIGN_LIFECYCLE_STEPS,
+  CAMPAIGN_NEXT_ACTION_BY_STATUS,
+  CAMPAIGN_STATUS_LABELS,
+  DEFAULT_TEMPLATE_VARIABLES,
+  EMPTY_TEMPLATE_PREVIEW_HTML,
+  REQUIRED_TRACKING_LINK_MESSAGE,
+  REQUIRED_TRACKING_LINK_PARAM,
+  campaignActionLabel,
+  campaignLifecycleIndex,
+  defaultCampaignForm,
+  normalizedIdList,
+  normalizedTemplateVariables
+} from '../utils/campaignConfig'
 
 export const useCampaignStore = defineStore('campaign', {
   state: () => ({
@@ -82,29 +72,11 @@ export const useCampaignStore = defineStore('campaign', {
   })
 })
 
-export const campaignStore = useCampaignStore(pinia)
+const campaignState = () => useCampaignStore()
+const appState = () => useAppStore()
+const segmentState = () => useSegmentStore()
 
-export function defaultCampaignForm(): CampaignForm {
-  return {
-    name: '',
-    objective: '',
-    subject: '',
-    fromName: '',
-    htmlBody: '',
-    templateVariables: [],
-    trackingTargetUrl: '',
-    trackingShortCode: '',
-    trackingUtmSource: '',
-    trackingUtmMedium: '',
-    trackingUtmCampaign: '',
-    trackingUtmContent: '',
-    trackingUtmTerm: '',
-    channelId: '',
-    segmentIds: []
-  }
-}
-
-export const campaignCurrentStatus = computed(() => campaignStore.selectedCampaign?.status || 'DRAFT')
+export const campaignCurrentStatus = computed(() => campaignState().selectedCampaign?.status || 'DRAFT')
 export const campaignCurrentStatusLabel = computed(() => CAMPAIGN_STATUS_LABELS[campaignCurrentStatus.value] || campaignCurrentStatus.value)
 export const campaignNextAction = computed(() => CAMPAIGN_NEXT_ACTION_BY_STATUS[campaignCurrentStatus.value] || '')
 export const campaignNextActionLabel = computed(() => campaignNextAction.value ? campaignActionLabel(campaignNextAction.value) : '生命周期已完成')
@@ -112,32 +84,32 @@ export const campaignAdvanceButtonLabel = computed(() => campaignNextAction.valu
 export const templateMissingTrackingLinkParam = computed(() => !campaignHtmlHasTrackingLinkParam())
 
 export const editableTemplateVariableRows = computed(() =>
-  campaignStore.campaignForm.templateVariables
+  campaignState().campaignForm.templateVariables
     .map((variable, index) => ({ variable, index }))
     .filter(({ variable }) => String(variable.key || '').trim() !== REQUIRED_TRACKING_LINK_PARAM)
 )
 
 export const campaignSetupDirty = computed(() => {
-  const campaign = campaignStore.selectedCampaign
+  const campaign = campaignState().selectedCampaign
   if (!campaign?.id || !campaign.template) return false
-  return (campaign.template.subject || '') !== (campaignStore.campaignForm.subject || '')
-    || (campaign.template.fromName || '') !== (campaignStore.campaignForm.fromName || '')
-    || (campaign.template.htmlBody || campaign.template.body || '') !== (campaignStore.campaignForm.htmlBody || '')
-    || String(campaign.channelId || '') !== String(campaignStore.campaignForm.channelId || '')
-    || normalizedIdList(campaign.segmentIds) !== normalizedIdList(campaignStore.campaignForm.segmentIds)
-    || normalizedTemplateVariables(parseTemplateVariables(campaign.template.variablesJson, DEFAULT_TEMPLATE_VARIABLES)) !== normalizedTemplateVariables(campaignStore.campaignForm.templateVariables)
+  return (campaign.template.subject || '') !== (campaignState().campaignForm.subject || '')
+    || (campaign.template.fromName || '') !== (campaignState().campaignForm.fromName || '')
+    || (campaign.template.htmlBody || campaign.template.body || '') !== (campaignState().campaignForm.htmlBody || '')
+    || String(campaign.channelId || '') !== String(campaignState().campaignForm.channelId || '')
+    || normalizedIdList(campaign.segmentIds) !== normalizedIdList(campaignState().campaignForm.segmentIds)
+    || normalizedTemplateVariables(parseTemplateVariables(campaign.template.variablesJson, DEFAULT_TEMPLATE_VARIABLES)) !== normalizedTemplateVariables(campaignState().campaignForm.templateVariables)
 })
 
 export const campaignTrackingLinkDirty = computed(() => {
-  const campaign = campaignStore.selectedCampaign
+  const campaign = campaignState().selectedCampaign
   if (!campaign?.id) return false
-  return (campaign.trackingLink?.targetUrl || '') !== (campaignStore.campaignForm.trackingTargetUrl || '')
-    || (campaign.trackingLink?.shortCode || '') !== (campaignStore.campaignForm.trackingShortCode || '')
-    || (campaign.trackingLink?.utmSource || '') !== (campaignStore.campaignForm.trackingUtmSource || '')
-    || (campaign.trackingLink?.utmMedium || '') !== (campaignStore.campaignForm.trackingUtmMedium || '')
-    || (campaign.trackingLink?.utmCampaign || '') !== (campaignStore.campaignForm.trackingUtmCampaign || '')
-    || (campaign.trackingLink?.utmContent || '') !== (campaignStore.campaignForm.trackingUtmContent || '')
-    || (campaign.trackingLink?.utmTerm || '') !== (campaignStore.campaignForm.trackingUtmTerm || '')
+  return (campaign.trackingLink?.targetUrl || '') !== (campaignState().campaignForm.trackingTargetUrl || '')
+    || (campaign.trackingLink?.shortCode || '') !== (campaignState().campaignForm.trackingShortCode || '')
+    || (campaign.trackingLink?.utmSource || '') !== (campaignState().campaignForm.trackingUtmSource || '')
+    || (campaign.trackingLink?.utmMedium || '') !== (campaignState().campaignForm.trackingUtmMedium || '')
+    || (campaign.trackingLink?.utmCampaign || '') !== (campaignState().campaignForm.trackingUtmCampaign || '')
+    || (campaign.trackingLink?.utmContent || '') !== (campaignState().campaignForm.trackingUtmContent || '')
+    || (campaign.trackingLink?.utmTerm || '') !== (campaignState().campaignForm.trackingUtmTerm || '')
 })
 
 export const campaignLifecycleView = computed(() => {
@@ -150,77 +122,55 @@ export const campaignLifecycleView = computed(() => {
   }))
 })
 
-export function campaignLifecycleIndex(status: CampaignStatus): number {
-  const index = CAMPAIGN_LIFECYCLE_STEPS.findIndex((step) => step.status === status)
-  return index >= 0 ? index : 0
-}
-
-export function campaignActionLabel(action: string): string {
-  return CAMPAIGN_ACTION_LABELS[action as keyof typeof CAMPAIGN_ACTION_LABELS] || action
-}
-
-export function normalizedIdList(ids: (string | number)[] | undefined): string {
-  return [...(ids || [])].map(String).sort().join('|')
-}
-
-export function normalizedTemplateVariables(variables: { key?: string; label?: string; sampleValue?: string; required?: boolean }[] | undefined): string {
-  return JSON.stringify((variables || []).map((variable) => ({
-    key: String(variable.key || '').trim(),
-    label: String(variable.label || '').trim(),
-    sampleValue: String(variable.sampleValue || ''),
-    required: Boolean(variable.required)
-  })))
-}
-
 export function campaignPrePushBlockReason() {
-  if (!campaignStore.selectedCampaign?.id) return '请先创建或选择活动'
-  if (!campaignStore.selectedCampaign.template) return '请先保存活动配置以写入邮件模板'
+  if (!campaignState().selectedCampaign?.id) return '请先创建或选择活动'
+  if (!campaignState().selectedCampaign.template) return '请先保存活动配置以写入邮件模板'
   if (templateMissingTrackingLinkParam.value) return REQUIRED_TRACKING_LINK_MESSAGE
   if (campaignSetupDirty.value) return '当前模板、通道或客群有未保存修改，请先保存活动配置'
-  if (!campaignStore.selectedCampaign.trackingLink) return '请先保存活动短链接配置'
+  if (!campaignState().selectedCampaign.trackingLink) return '请先保存活动短链接配置'
   if (campaignTrackingLinkDirty.value) return '当前短链接配置有未保存修改，请先保存短链接配置'
-  if (!campaignStore.selectedCampaign.channelId) {
-    return campaignStore.campaignForm.channelId ? '请先保存活动配置以绑定推送通道' : '请先选择并保存推送通道'
+  if (!campaignState().selectedCampaign.channelId) {
+    return campaignState().campaignForm.channelId ? '请先保存活动配置以绑定推送通道' : '请先选择并保存推送通道'
   }
-  if (!campaignStore.selectedCampaign.segmentIds?.length) {
-    return campaignStore.campaignForm.segmentIds.length ? '请先保存活动配置以绑定客群' : '请先选择并保存客群'
+  if (!campaignState().selectedCampaign.segmentIds?.length) {
+    return campaignState().campaignForm.segmentIds.length ? '请先保存活动配置以绑定客群' : '请先选择并保存客群'
   }
   return ''
 }
 
 export function campaignDraftAdvanceBlockReason() {
   if (campaignNextAction.value !== 'saveDraft') return ''
-  if (!campaignStore.selectedCampaign?.id) return '请先创建活动，并保存短链接配置、推送通道和客群'
-  if (!campaignStore.selectedCampaign.trackingLink) return '请先保存活动短链接配置'
+  if (!campaignState().selectedCampaign?.id) return '请先创建活动，并保存短链接配置、推送通道和客群'
+  if (!campaignState().selectedCampaign.trackingLink) return '请先保存活动短链接配置'
   if (campaignTrackingLinkDirty.value) return '当前短链接配置有未保存修改，请先保存短链接配置'
-  if (!campaignStore.selectedCampaign.channelId) {
-    return campaignStore.campaignForm.channelId ? '请先保存活动配置以绑定推送通道' : '请先选择并保存推送通道'
+  if (!campaignState().selectedCampaign.channelId) {
+    return campaignState().campaignForm.channelId ? '请先保存活动配置以绑定推送通道' : '请先选择并保存推送通道'
   }
-  if (!campaignStore.selectedCampaign.segmentIds?.length) {
-    return campaignStore.campaignForm.segmentIds.length ? '请先保存活动配置以绑定客群' : '请先选择并保存客群'
+  if (!campaignState().selectedCampaign.segmentIds?.length) {
+    return campaignState().campaignForm.segmentIds.length ? '请先保存活动配置以绑定客群' : '请先选择并保存客群'
   }
   if (campaignSetupDirty.value) return '当前模板、通道或客群有未保存修改，请先保存活动配置'
   return ''
 }
 
 export function isCampaignActionDisabled(action) {
-  if (appStore.loading || !campaignStore.selectedCampaign?.id) return true
+  if (appState().loading || !campaignState().selectedCampaign?.id) return true
   if (action === 'prePush' && campaignPrePushBlockReason()) return true
   return campaignNextAction.value !== action
 }
 
 export function isCampaignAdvanceDisabled() {
-  if (appStore.loading || !campaignNextAction.value) return true
-  if (campaignStore.selectedCampaign?.id) return false
-  return campaignNextAction.value !== 'saveDraft' || !campaignStore.campaignForm.name.trim()
+  if (appState().loading || !campaignNextAction.value) return true
+  if (campaignState().selectedCampaign?.id) return false
+  return campaignNextAction.value !== 'saveDraft' || !campaignState().campaignForm.name.trim()
 }
 
 export function isCampaignStepDisabled(step) {
-  return appStore.loading || !campaignStore.selectedCampaign?.id || !step?.rollback
+  return appState().loading || !campaignState().selectedCampaign?.id || !step?.rollback
 }
 
 export function campaignActionTitle(action) {
-  if (!campaignStore.selectedCampaign?.id) return '请先创建或选择活动'
+  if (!campaignState().selectedCampaign?.id) return '请先创建或选择活动'
   if (action === 'prePush') {
     const reason = campaignPrePushBlockReason()
     if (reason) return reason
@@ -233,7 +183,7 @@ export function campaignActionTitle(action) {
 export function campaignAdvanceTitle() {
   if (!campaignNextAction.value) return '当前活动生命周期已完成'
   if (campaignNextAction.value === 'saveDraft') return campaignDraftAdvanceBlockReason() || '保存当前草稿配置，并进入模拟发送步骤'
-  if (!campaignStore.selectedCampaign?.id) return '请先创建或选择活动'
+  if (!campaignState().selectedCampaign?.id) return '请先创建或选择活动'
   if (campaignNextAction.value === 'prePush') {
     const reason = campaignPrePushBlockReason()
     if (reason) return reason
@@ -243,7 +193,7 @@ export function campaignAdvanceTitle() {
 }
 
 export function campaignStepTitle(step) {
-  if (!campaignStore.selectedCampaign?.id) return '请先创建或选择活动'
+  if (!campaignState().selectedCampaign?.id) return '请先创建或选择活动'
   if (campaignCurrentStatus.value === 'CONFIRMED') return '推送完成后状态不可修改'
   if (step?.active) return '当前步骤'
   if (step?.rollback) return `回退到上一步：${step.label}`
@@ -251,67 +201,67 @@ export function campaignStepTitle(step) {
 }
 
 export function fillCampaignForm(campaign: Campaign): void {
-  campaignStore.selectedCampaign = campaign
-  campaignStore.campaignForm.name = campaign.name || ''
-  campaignStore.campaignForm.objective = campaign.objective || ''
-  campaignStore.campaignForm.subject = campaign.template?.subject || ''
-  campaignStore.campaignForm.fromName = campaign.template?.fromName || ''
-  campaignStore.campaignForm.htmlBody = campaign.template?.htmlBody || campaign.template?.body || ''
-  campaignStore.campaignForm.templateVariables = campaign.template
+  campaignState().selectedCampaign = campaign
+  campaignState().campaignForm.name = campaign.name || ''
+  campaignState().campaignForm.objective = campaign.objective || ''
+  campaignState().campaignForm.subject = campaign.template?.subject || ''
+  campaignState().campaignForm.fromName = campaign.template?.fromName || ''
+  campaignState().campaignForm.htmlBody = campaign.template?.htmlBody || campaign.template?.body || ''
+  campaignState().campaignForm.templateVariables = campaign.template
     ? parseTemplateVariables(campaign.template.variablesJson, DEFAULT_TEMPLATE_VARIABLES)
     : []
   syncCampaignTemplateVariables()
-  campaignStore.campaignForm.trackingTargetUrl = campaign.trackingLink?.targetUrl || ''
-  campaignStore.campaignForm.trackingShortCode = campaign.trackingLink?.shortCode || ''
-  campaignStore.campaignForm.trackingUtmSource = campaign.trackingLink?.utmSource || ''
-  campaignStore.campaignForm.trackingUtmMedium = campaign.trackingLink?.utmMedium || ''
-  campaignStore.campaignForm.trackingUtmCampaign = campaign.trackingLink?.utmCampaign || ''
-  campaignStore.campaignForm.trackingUtmContent = campaign.trackingLink?.utmContent || ''
-  campaignStore.campaignForm.trackingUtmTerm = campaign.trackingLink?.utmTerm || ''
-  campaignStore.campaignForm.channelId = campaign.channelId || ''
-  campaignStore.campaignForm.segmentIds = [...(campaign.segmentIds || [])]
-  campaignStore.segmentDropdownOpen = false
-  campaignStore.segmentDropdownQuery = ''
-  campaignStore.trackingLinkDialogOpen = false
+  campaignState().campaignForm.trackingTargetUrl = campaign.trackingLink?.targetUrl || ''
+  campaignState().campaignForm.trackingShortCode = campaign.trackingLink?.shortCode || ''
+  campaignState().campaignForm.trackingUtmSource = campaign.trackingLink?.utmSource || ''
+  campaignState().campaignForm.trackingUtmMedium = campaign.trackingLink?.utmMedium || ''
+  campaignState().campaignForm.trackingUtmCampaign = campaign.trackingLink?.utmCampaign || ''
+  campaignState().campaignForm.trackingUtmContent = campaign.trackingLink?.utmContent || ''
+  campaignState().campaignForm.trackingUtmTerm = campaign.trackingLink?.utmTerm || ''
+  campaignState().campaignForm.channelId = campaign.channelId || ''
+  campaignState().campaignForm.segmentIds = [...(campaign.segmentIds || [])]
+  campaignState().segmentDropdownOpen = false
+  campaignState().segmentDropdownQuery = ''
+  campaignState().trackingLinkDialogOpen = false
   updateLocalTemplatePreview()
 }
 
 export function clearCampaignSelection(): void {
-  campaignStore.selectedCampaign = null
-  campaignStore.campaignForm = defaultCampaignForm()
-  campaignStore.segmentDropdownOpen = false
-  campaignStore.segmentDropdownQuery = ''
-  campaignStore.trackingLinkDialogOpen = false
+  campaignState().selectedCampaign = null
+  campaignState().campaignForm = defaultCampaignForm()
+  campaignState().segmentDropdownOpen = false
+  campaignState().segmentDropdownQuery = ''
+  campaignState().trackingLinkDialogOpen = false
   updateLocalTemplatePreview()
 }
 
 export function syncCampaignTemplateVariables(): void {
-  campaignStore.campaignForm.templateVariables = syncTemplateVariables({
-    subject: campaignStore.campaignForm.subject,
-    htmlBody: campaignStore.campaignForm.htmlBody,
-    variables: campaignStore.campaignForm.templateVariables
+  campaignState().campaignForm.templateVariables = syncTemplateVariables({
+    subject: campaignState().campaignForm.subject,
+    htmlBody: campaignState().campaignForm.htmlBody,
+    variables: campaignState().campaignForm.templateVariables
   })
   updateLocalTemplatePreview()
 }
 
 export function updateLocalTemplatePreview(): void {
   const preview = renderTemplatePreview({
-    subject: campaignStore.campaignForm.subject,
-    htmlBody: campaignStore.campaignForm.htmlBody,
-    variables: campaignStore.campaignForm.templateVariables
+    subject: campaignState().campaignForm.subject,
+    htmlBody: campaignState().campaignForm.htmlBody,
+    variables: campaignState().campaignForm.templateVariables
   })
-  campaignStore.templatePreviewSubject = preview.subjectPreview || ''
-  campaignStore.templatePreviewHtml = preview.htmlPreview || ''
-  campaignStore.templatePreviewError = ''
+  campaignState().templatePreviewSubject = preview.subjectPreview || ''
+  campaignState().templatePreviewHtml = preview.htmlPreview || ''
+  campaignState().templatePreviewError = ''
 }
 
 export function templateVariablesJson(): string {
   syncCampaignTemplateVariables()
-  return templateVariablesToJson(campaignStore.campaignForm.templateVariables)
+  return templateVariablesToJson(campaignState().campaignForm.templateVariables)
 }
 
 export function addTemplateVariable(): void {
-  campaignStore.campaignForm.templateVariables.push({
+  campaignState().campaignForm.templateVariables.push({
     key: '',
     label: '',
     sampleValue: '',
@@ -320,7 +270,7 @@ export function addTemplateVariable(): void {
 }
 
 export function removeTemplateVariable(index: number): void {
-  campaignStore.campaignForm.templateVariables.splice(index, 1)
+  campaignState().campaignForm.templateVariables.splice(index, 1)
 }
 
 export async function insertTemplateVariable(variable: { key?: string }): Promise<void> {
@@ -329,13 +279,13 @@ export async function insertTemplateVariable(variable: { key?: string }): Promis
   const placeholder = '${' + key + '}'
   const editor = document.getElementById('campaign-html-editor') as HTMLTextAreaElement | null
   if (!editor) {
-    campaignStore.campaignForm.htmlBody += placeholder
+    campaignState().campaignForm.htmlBody += placeholder
     syncCampaignTemplateVariables()
     return
   }
-  const start = editor.selectionStart ?? campaignStore.campaignForm.htmlBody.length
-  const end = editor.selectionEnd ?? campaignStore.campaignForm.htmlBody.length
-  campaignStore.campaignForm.htmlBody = `${campaignStore.campaignForm.htmlBody.slice(0, start)}${placeholder}${campaignStore.campaignForm.htmlBody.slice(end)}`
+  const start = editor.selectionStart ?? campaignState().campaignForm.htmlBody.length
+  const end = editor.selectionEnd ?? campaignState().campaignForm.htmlBody.length
+  campaignState().campaignForm.htmlBody = `${campaignState().campaignForm.htmlBody.slice(0, start)}${placeholder}${campaignState().campaignForm.htmlBody.slice(end)}`
   syncCampaignTemplateVariables()
   await nextTick()
   editor.focus()
@@ -352,23 +302,23 @@ export interface CampaignTemplatePayload {
 export function campaignTemplatePayload(): CampaignTemplatePayload {
   syncCampaignTemplateVariables()
   return {
-    subject: campaignStore.campaignForm.subject,
-    fromName: campaignStore.campaignForm.fromName,
-    htmlBody: campaignStore.campaignForm.htmlBody,
+    subject: campaignState().campaignForm.subject,
+    fromName: campaignState().campaignForm.fromName,
+    htmlBody: campaignState().campaignForm.htmlBody,
     variablesJson: templateVariablesJson()
   }
 }
 
 export function campaignHtmlHasTrackingLinkParam(): boolean {
-  return scanTemplateVariableKeys(campaignStore.campaignForm.htmlBody).includes(REQUIRED_TRACKING_LINK_PARAM)
+  return scanTemplateVariableKeys(campaignState().campaignForm.htmlBody).includes(REQUIRED_TRACKING_LINK_PARAM)
 }
 
 export function validateCampaignTemplateTrackingLink(): boolean {
   if (campaignHtmlHasTrackingLinkParam()) return true
-  campaignStore.templatePreviewHtml = ''
-  campaignStore.templatePreviewSubject = ''
-  campaignStore.templatePreviewError = REQUIRED_TRACKING_LINK_MESSAGE
-  appStore.error = REQUIRED_TRACKING_LINK_MESSAGE
+  campaignState().templatePreviewHtml = ''
+  campaignState().templatePreviewSubject = ''
+  campaignState().templatePreviewError = REQUIRED_TRACKING_LINK_MESSAGE
+  appState().error = REQUIRED_TRACKING_LINK_MESSAGE
   return false
 }
 
@@ -384,44 +334,44 @@ export interface CampaignTrackingLinkPayload {
 
 export function campaignTrackingLinkPayload(): CampaignTrackingLinkPayload {
   return {
-    targetUrl: campaignStore.campaignForm.trackingTargetUrl,
-    shortCode: campaignStore.campaignForm.trackingShortCode,
-    utmSource: campaignStore.campaignForm.trackingUtmSource,
-    utmMedium: campaignStore.campaignForm.trackingUtmMedium,
-    utmCampaign: campaignStore.campaignForm.trackingUtmCampaign,
-    utmContent: campaignStore.campaignForm.trackingUtmContent,
-    utmTerm: campaignStore.campaignForm.trackingUtmTerm
+    targetUrl: campaignState().campaignForm.trackingTargetUrl,
+    shortCode: campaignState().campaignForm.trackingShortCode,
+    utmSource: campaignState().campaignForm.trackingUtmSource,
+    utmMedium: campaignState().campaignForm.trackingUtmMedium,
+    utmCampaign: campaignState().campaignForm.trackingUtmCampaign,
+    utmContent: campaignState().campaignForm.trackingUtmContent,
+    utmTerm: campaignState().campaignForm.trackingUtmTerm
   }
 }
 
 export function openTrackingLinkDialog(): void {
-  if (!campaignStore.selectedCampaign?.id) {
-    appStore.error = '请先创建或选择活动'
+  if (!campaignState().selectedCampaign?.id) {
+    appState().error = '请先创建或选择活动'
     return
   }
-  campaignStore.trackingLinkDialogOpen = true
+  campaignState().trackingLinkDialogOpen = true
 }
 
 export function closeTrackingLinkDialog(): void {
-  campaignStore.trackingLinkDialogOpen = false
+  campaignState().trackingLinkDialogOpen = false
 }
 
 export function openFinalConfirmDialog(): void {
-  if (!campaignStore.selectedCampaign?.id) {
-    appStore.error = '请先选择或创建活动'
+  if (!campaignState().selectedCampaign?.id) {
+    appState().error = '请先选择或创建活动'
     return
   }
-  campaignStore.finalConfirmDialogOpen = true
-  appStore.error = ''
+  campaignState().finalConfirmDialogOpen = true
+  appState().error = ''
 }
 
 export function closeFinalConfirmDialog(): void {
-  campaignStore.finalConfirmDialogOpen = false
+  campaignState().finalConfirmDialogOpen = false
 }
 
-export function filteredCampaignSegments(segments = segmentStore.segments): Segment[] {
+export function filteredCampaignSegments(segments = segmentState().segments): Segment[] {
   const items = Array.isArray(segments) ? segments : []
-  const keyword = campaignStore.segmentDropdownQuery.trim().toLowerCase()
+  const keyword = campaignState().segmentDropdownQuery.trim().toLowerCase()
   if (!keyword) return items
   return items.filter((segment) =>
     [segment.name, segment.id, segment.description]
@@ -430,27 +380,27 @@ export function filteredCampaignSegments(segments = segmentStore.segments): Segm
   )
 }
 
-export function selectedCampaignSegments(segments = segmentStore.segments): Segment[] {
+export function selectedCampaignSegments(segments = segmentState().segments): Segment[] {
   const items = Array.isArray(segments) ? segments : []
-  return campaignStore.campaignForm.segmentIds
+  return campaignState().campaignForm.segmentIds
     .map((id) => items.find((segment) => segment.id === id))
     .filter((s): s is Segment => Boolean(s))
 }
 
 export function isCampaignSegmentSelected(segmentId: string | number): boolean {
-  return campaignStore.campaignForm.segmentIds.includes(segmentId)
+  return campaignState().campaignForm.segmentIds.includes(segmentId)
 }
 
 export function toggleCampaignSegment(segmentId: string | number): void {
   if (isCampaignSegmentSelected(segmentId)) {
-    campaignStore.campaignForm.segmentIds = campaignStore.campaignForm.segmentIds.filter((id) => id !== segmentId)
+    campaignState().campaignForm.segmentIds = campaignState().campaignForm.segmentIds.filter((id) => id !== segmentId)
     return
   }
-  campaignStore.campaignForm.segmentIds = [...campaignStore.campaignForm.segmentIds, segmentId]
+  campaignState().campaignForm.segmentIds = [...campaignState().campaignForm.segmentIds, segmentId]
 }
 
 export function removeCampaignSegment(segmentId: string | number): void {
-  campaignStore.campaignForm.segmentIds = campaignStore.campaignForm.segmentIds.filter((id) => id !== segmentId)
+  campaignState().campaignForm.segmentIds = campaignState().campaignForm.segmentIds.filter((id) => id !== segmentId)
 }
 
 export function normalizeEmailInput(email: unknown): string {
@@ -458,162 +408,162 @@ export function normalizeEmailInput(email: unknown): string {
 }
 
 export function isTestEmailSelected(email: string): boolean {
-  return campaignStore.selectedTestEmails.includes(normalizeEmailInput(email))
+  return campaignState().selectedTestEmails.includes(normalizeEmailInput(email))
 }
 
 export function toggleTestEmail(email: string): void {
   const normalized = normalizeEmailInput(email)
   if (!normalized) return
   if (isTestEmailSelected(normalized)) {
-    campaignStore.selectedTestEmails = campaignStore.selectedTestEmails.filter((item) => item !== normalized)
+    campaignState().selectedTestEmails = campaignState().selectedTestEmails.filter((item) => item !== normalized)
     return
   }
-  campaignStore.selectedTestEmails = [...campaignStore.selectedTestEmails, normalized]
+  campaignState().selectedTestEmails = [...campaignState().selectedTestEmails, normalized]
 }
 
 export async function loadTestEmails(): Promise<void> {
   try {
-    campaignStore.testEmails = await campaignsApi.listTestEmails()
+    campaignState().testEmails = await campaignsApi.listTestEmails()
   } catch (error: unknown) {
     const err = error as { message?: string }
-    campaignStore.testEmails = []
-    appStore.error = `测试邮箱加载失败：${err.message}`
+    campaignState().testEmails = []
+    appState().error = `测试邮箱加载失败：${err.message}`
   }
 }
 
 export async function openTestEmailDialog(): Promise<void> {
-  if (!campaignStore.selectedCampaign?.id) {
-    appStore.error = '请先选择或创建活动'
+  if (!campaignState().selectedCampaign?.id) {
+    appState().error = '请先选择或创建活动'
     return
   }
-  campaignStore.testEmailDialogOpen = true
-  appStore.error = ''
+  campaignState().testEmailDialogOpen = true
+  appState().error = ''
   await loadTestEmails()
 }
 
 export function closeTestEmailDialog(): void {
-  campaignStore.testEmailDialogOpen = false
+  campaignState().testEmailDialogOpen = false
 }
 
 export async function addTestEmail(): Promise<void> {
-  const email = normalizeEmailInput(campaignStore.newTestEmail)
+  const email = normalizeEmailInput(campaignState().newTestEmail)
   if (!email) {
-    appStore.error = '请输入测试邮箱'
+    appState().error = '请输入测试邮箱'
     return
   }
-  appStore.loading = true
-  appStore.error = ''
+  appState().loading = true
+  appState().error = ''
   try {
     await campaignsApi.addTestEmail(email)
     await loadTestEmails()
     if (!isTestEmailSelected(email)) {
-      campaignStore.selectedTestEmails = [...campaignStore.selectedTestEmails, email]
+      campaignState().selectedTestEmails = [...campaignState().selectedTestEmails, email]
     }
-    campaignStore.newTestEmail = ''
+    campaignState().newTestEmail = ''
   } catch (error: unknown) {
     const err = error as { message?: string }
-    appStore.error = `测试邮箱保存失败：${err.message}`
+    appState().error = `测试邮箱保存失败：${err.message}`
   } finally {
-    appStore.loading = false
+    appState().loading = false
   }
 }
 
 export async function deleteTestEmail(testEmail: TestEmail): Promise<void> {
   if (!testEmail?.id) return
-  appStore.loading = true
-  appStore.error = ''
+  appState().loading = true
+  appState().error = ''
   try {
     await campaignsApi.deleteTestEmail(testEmail.id)
-    campaignStore.selectedTestEmails = campaignStore.selectedTestEmails.filter((email) => email !== normalizeEmailInput(testEmail.email))
+    campaignState().selectedTestEmails = campaignState().selectedTestEmails.filter((email) => email !== normalizeEmailInput(testEmail.email))
     await loadTestEmails()
   } catch (error: unknown) {
     const err = error as { message?: string }
-    appStore.error = `测试邮箱删除失败：${err.message}`
+    appState().error = `测试邮箱删除失败：${err.message}`
   } finally {
-    appStore.loading = false
+    appState().loading = false
   }
 }
 
-export async function loadCampaigns(page = campaignStore.campaignPage.page): Promise<void> {
+export async function loadCampaigns(page = campaignState().campaignPage.page): Promise<void> {
   try {
-    const result = await campaignsApi.list(pageQuery(campaignStore.campaignPage, page))
-    const pageResult = normalizePageResult<Campaign>(result, [], page, campaignStore.campaignPage.size)
-    campaignStore.campaigns = pageResult.items
-    campaignStore.campaignPage = pageResult
-    if (campaignStore.selectedCampaign && !pageResult.items.some((item) => item.id === campaignStore.selectedCampaign!.id)) {
+    const result = await campaignsApi.list(pageQuery(campaignState().campaignPage, page))
+    const pageResult = normalizePageResult<Campaign>(result, [], page, campaignState().campaignPage.size)
+    campaignState().campaigns = pageResult.items
+    campaignState().campaignPage = pageResult
+    if (campaignState().selectedCampaign && !pageResult.items.some((item) => item.id === campaignState().selectedCampaign!.id)) {
       clearCampaignSelection()
     }
-    if (campaignStore.selectedCampaign) {
-      campaignStore.selectedCampaign = pageResult.items.find((item) => item.id === campaignStore.selectedCampaign!.id) || null
+    if (campaignState().selectedCampaign) {
+      campaignState().selectedCampaign = pageResult.items.find((item) => item.id === campaignState().selectedCampaign!.id) || null
     }
     if (!pageResult.items.length) {
       clearCampaignSelection()
     }
-    if (!campaignStore.selectedCampaign && pageResult.items.length) {
+    if (!campaignState().selectedCampaign && pageResult.items.length) {
       fillCampaignForm(pageResult.items[0])
     }
   } catch (error: unknown) {
     const err = error as { message?: string }
-    campaignStore.campaigns = []
-    campaignStore.campaignPage = emptyPageResult<Campaign>(0, campaignStore.campaignPage.size)
+    campaignState().campaigns = []
+    campaignState().campaignPage = emptyPageResult<Campaign>(0, campaignState().campaignPage.size)
     clearCampaignSelection()
-    appStore.error = `活动加载失败：${err.message}`
+    appState().error = `活动加载失败：${err.message}`
   }
 }
 
-async function createCampaign(): Promise<void> {
-  appStore.loading = true
-  appStore.error = ''
-  appStore.notice = ''
+export async function createCampaign(): Promise<void> {
+  appState().loading = true
+  appState().error = ''
+  appState().notice = ''
   try {
-    const campaign = await campaignsApi.create({ name: campaignStore.campaignForm.name, objective: campaignStore.campaignForm.objective })
-    campaignStore.selectedCampaign = campaign
+    const campaign = await campaignsApi.create({ name: campaignState().campaignForm.name, objective: campaignState().campaignForm.objective })
+    campaignState().selectedCampaign = campaign
     fillCampaignForm(campaign)
     await loadCampaigns()
-    appStore.notice = '邮件活动已创建'
+    appState().notice = '邮件活动已创建'
   } catch (error: unknown) {
     const err = error as { message?: string }
-    appStore.error = `活动创建失败：${err.message}`
+    appState().error = `活动创建失败：${err.message}`
   } finally {
-    appStore.loading = false
+    appState().loading = false
   }
 }
 
 export async function saveCampaignSetup(): Promise<void> {
   if (!validateCampaignTemplateTrackingLink()) return
-  if (!campaignStore.selectedCampaign?.id) {
+  if (!campaignState().selectedCampaign?.id) {
     await createCampaign()
   }
-  const campaignId = campaignStore.selectedCampaign?.id
+  const campaignId = campaignState().selectedCampaign?.id
   if (!campaignId) return
-  appStore.loading = true
-  appStore.error = ''
-  appStore.notice = ''
+  appState().loading = true
+  appState().error = ''
+  appState().notice = ''
   try {
     let campaign = await campaignsApi.updateTemplate(campaignId, campaignTemplatePayload())
-    if (campaignStore.campaignForm.channelId) {
-      campaign = await campaignsApi.updateChannel(campaignId, campaignStore.campaignForm.channelId)
+    if (campaignState().campaignForm.channelId) {
+      campaign = await campaignsApi.updateChannel(campaignId, campaignState().campaignForm.channelId)
     }
-    if (campaignStore.campaignForm.segmentIds.length) {
-      campaign = await campaignsApi.updateSegments(campaignId, campaignStore.campaignForm.segmentIds)
+    if (campaignState().campaignForm.segmentIds.length) {
+      campaign = await campaignsApi.updateSegments(campaignId, campaignState().campaignForm.segmentIds)
     }
     fillCampaignForm(campaign)
     await loadCampaigns()
-    appStore.notice = '活动配置已保存'
+    appState().notice = '活动配置已保存'
   } catch (error: unknown) {
     const err = error as { message?: string }
-    appStore.error = `活动配置保存失败：${err.message}`
+    appState().error = `活动配置保存失败：${err.message}`
   } finally {
-    appStore.loading = false
+    appState().loading = false
   }
 }
 
 async function saveCampaignDraftForAdvance(): Promise<Campaign | null> {
   if (!validateCampaignTemplateTrackingLink()) return null
-  let campaign = campaignStore.selectedCampaign
+  let campaign = campaignState().selectedCampaign
   if (!campaign?.id) {
-    campaign = await campaignsApi.create({ name: campaignStore.campaignForm.name, objective: campaignStore.campaignForm.objective })
-    campaignStore.selectedCampaign = campaign
+    campaign = await campaignsApi.create({ name: campaignState().campaignForm.name, objective: campaignState().campaignForm.objective })
+    campaignState().selectedCampaign = campaign
   }
   const campaignId = campaign.id
   campaign = await campaignsApi.updateTemplate(campaignId, campaignTemplatePayload())
@@ -623,48 +573,48 @@ async function saveCampaignDraftForAdvance(): Promise<Campaign | null> {
 }
 
 export async function saveCampaignTrackingLink(): Promise<void> {
-  if (!campaignStore.selectedCampaign?.id) {
-    appStore.error = '请先创建或选择活动'
+  if (!campaignState().selectedCampaign?.id) {
+    appState().error = '请先创建或选择活动'
     return
   }
-  const campaignId = campaignStore.selectedCampaign.id
-  appStore.loading = true
-  appStore.error = ''
-  appStore.notice = ''
+  const campaignId = campaignState().selectedCampaign.id
+  appState().loading = true
+  appState().error = ''
+  appState().notice = ''
   try {
     const campaign = await campaignsApi.updateTrackingLink(campaignId, campaignTrackingLinkPayload())
     fillCampaignForm(campaign)
     await loadCampaigns()
-    campaignStore.trackingLinkDialogOpen = false
-    appStore.notice = '短链接配置已保存'
+    campaignState().trackingLinkDialogOpen = false
+    appState().notice = '短链接配置已保存'
   } catch (error: unknown) {
     const err = error as { message?: string }
-    appStore.error = `短链接配置保存失败：${err.message}`
+    appState().error = `短链接配置保存失败：${err.message}`
   } finally {
-    appStore.loading = false
+    appState().loading = false
   }
 }
 
 export async function previewCampaignTemplate(): Promise<void> {
   if (!validateCampaignTemplateTrackingLink()) return
-  if (!campaignStore.selectedCampaign?.id) {
+  if (!campaignState().selectedCampaign?.id) {
     updateLocalTemplatePreview()
     return
   }
-  const campaignId = campaignStore.selectedCampaign.id
-  campaignStore.templatePreviewLoading = true
-  campaignStore.templatePreviewError = ''
+  const campaignId = campaignState().selectedCampaign.id
+  campaignState().templatePreviewLoading = true
+  campaignState().templatePreviewError = ''
   try {
     const result = await campaignsApi.previewTemplate(campaignId, campaignTemplatePayload())
-    campaignStore.templatePreviewSubject = result.subjectPreview || ''
-    campaignStore.templatePreviewHtml = result.htmlPreview || ''
+    campaignState().templatePreviewSubject = result.subjectPreview || ''
+    campaignState().templatePreviewHtml = result.htmlPreview || ''
   } catch (error: unknown) {
     const err = error as { message?: string }
-    campaignStore.templatePreviewHtml = ''
-    campaignStore.templatePreviewSubject = ''
-    campaignStore.templatePreviewError = err.message || '模板预览失败'
+    campaignState().templatePreviewHtml = ''
+    campaignState().templatePreviewSubject = ''
+    campaignState().templatePreviewError = err.message || '模板预览失败'
   } finally {
-    campaignStore.templatePreviewLoading = false
+    campaignState().templatePreviewLoading = false
   }
 }
 
@@ -683,18 +633,18 @@ interface CampaignStep {
 }
 
 export async function runCampaignAction(action: string, options: CampaignActionOptions = {}): Promise<void> {
-  if (!campaignStore.selectedCampaign?.id) {
-    appStore.error = '请先选择或创建活动'
+  if (!campaignState().selectedCampaign?.id) {
+    appState().error = '请先选择或创建活动'
     return
   }
   if (campaignNextAction.value !== action) {
-    appStore.error = campaignActionTitle(action)
+    appState().error = campaignActionTitle(action)
     return
   }
   if (action === 'prePush') {
     const reason = campaignPrePushBlockReason()
     if (reason) {
-      appStore.error = reason
+      appState().error = reason
       return
     }
   }
@@ -702,41 +652,41 @@ export async function runCampaignAction(action: string, options: CampaignActionO
     await openTestEmailDialog()
     return
   }
-  if (action === 'simulateSend' && !campaignStore.selectedTestEmails.length) {
-    appStore.error = '请选择或新增至少一个测试邮箱'
+  if (action === 'simulateSend' && !campaignState().selectedTestEmails.length) {
+    appState().error = '请选择或新增至少一个测试邮箱'
     return
   }
-  appStore.loading = true
-  appStore.error = ''
-  appStore.notice = ''
+  appState().loading = true
+  appState().error = ''
+  appState().notice = ''
   try {
-    const campaignId = campaignStore.selectedCampaign.id
-    const body = action === 'simulateSend' ? { testEmails: campaignStore.selectedTestEmails } : {}
+    const campaignId = campaignState().selectedCampaign.id
+    const body = action === 'simulateSend' ? { testEmails: campaignState().selectedTestEmails } : {}
     const campaign = await campaignsApi.action(campaignId, action as CampaignActionKey, body)
     fillCampaignForm(campaign)
     await loadCampaigns()
     if (action === 'simulateSend') {
       closeTestEmailDialog()
-      campaignStore.selectedTestEmails = []
-      appStore.notice = '模拟发送成功'
+      campaignState().selectedTestEmails = []
+      appState().notice = '模拟发送成功'
     } else {
-      appStore.notice = '活动状态已更新'
+      appState().notice = '活动状态已更新'
     }
   } catch (error: unknown) {
     const err = error as { message?: string }
-    appStore.error = `活动操作失败：${err.message}`
+    appState().error = `活动操作失败：${err.message}`
   } finally {
-    appStore.loading = false
+    appState().loading = false
   }
 }
 
 export async function advanceCampaignStep(options: CampaignActionOptions = {}): Promise<void> {
   if (!campaignNextAction.value) {
-    appStore.error = '当前活动生命周期已完成'
+    appState().error = '当前活动生命周期已完成'
     return
   }
-  if (!campaignStore.selectedCampaign?.id && campaignNextAction.value !== 'saveDraft') {
-    appStore.error = '请先选择或创建活动'
+  if (!campaignState().selectedCampaign?.id && campaignNextAction.value !== 'saveDraft') {
+    appState().error = '请先选择或创建活动'
     return
   }
   if (campaignNextAction.value === 'confirm' && !options.confirmedFinalPush) {
@@ -749,27 +699,27 @@ export async function advanceCampaignStep(options: CampaignActionOptions = {}): 
   }
   const draftBlockReason = campaignDraftAdvanceBlockReason()
   if (draftBlockReason) {
-    appStore.error = draftBlockReason
+    appState().error = draftBlockReason
     return
   }
-  appStore.loading = true
-  appStore.error = ''
-  appStore.notice = ''
+  appState().loading = true
+  appState().error = ''
+  appState().notice = ''
   try {
     const campaign = await saveCampaignDraftForAdvance()
     if (!campaign) return
-    appStore.notice = `已确认并进入下一步：${campaignCurrentStatusLabel.value}`
+    appState().notice = `已确认并进入下一步：${campaignCurrentStatusLabel.value}`
   } catch (error: unknown) {
     const err = error as { message?: string }
-    appStore.error = `活动状态推进失败：${err.message}`
+    appState().error = `活动状态推进失败：${err.message}`
   } finally {
-    appStore.loading = false
+    appState().loading = false
   }
 }
 
 export async function confirmTestSimulation(): Promise<void> {
-  if (!campaignStore.selectedTestEmails.length) {
-    appStore.error = '请选择或新增至少一个测试邮箱'
+  if (!campaignState().selectedTestEmails.length) {
+    appState().error = '请选择或新增至少一个测试邮箱'
     return
   }
   await advanceCampaignStep({ confirmedTestEmails: true })
@@ -781,47 +731,47 @@ export async function confirmFinalPush(): Promise<void> {
 }
 
 export async function rollbackCampaignStep(step: CampaignStep | null | undefined): Promise<void> {
-  if (!campaignStore.selectedCampaign?.id) {
-    appStore.error = '请先选择或创建活动'
+  if (!campaignState().selectedCampaign?.id) {
+    appState().error = '请先选择或创建活动'
     return
   }
   if (!step?.rollback) {
-    appStore.error = campaignStepTitle(step)
+    appState().error = campaignStepTitle(step)
     return
   }
-  appStore.loading = true
-  appStore.error = ''
-  appStore.notice = ''
+  appState().loading = true
+  appState().error = ''
+  appState().notice = ''
   try {
-    const campaign = await campaignsApi.rollback(campaignStore.selectedCampaign.id, {
+    const campaign = await campaignsApi.rollback(campaignState().selectedCampaign.id, {
       expectedStatus: campaignCurrentStatus.value,
       targetStatus: step.status
     })
     fillCampaignForm(campaign)
     await loadCampaigns()
-    appStore.notice = `已回退到上一步：${campaignCurrentStatusLabel.value}`
+    appState().notice = `已回退到上一步：${campaignCurrentStatusLabel.value}`
   } catch (error: unknown) {
     const err = error as { message?: string }
-    appStore.error = `活动状态回退失败：${err.message}`
+    appState().error = `活动状态回退失败：${err.message}`
   } finally {
-    appStore.loading = false
+    appState().loading = false
   }
 }
 
 export function changeCampaignPage(nextPage: number): void {
-  if (nextPage < 0 || (campaignStore.campaignPage.totalPages && nextPage >= campaignStore.campaignPage.totalPages)) return
+  if (nextPage < 0 || (campaignState().campaignPage.totalPages && nextPage >= campaignState().campaignPage.totalPages)) return
   loadCampaigns(nextPage)
 }
 
 export function jumpCampaignPage(pageNumber: number | string): void {
-  const nextPage = boundedPage(campaignStore.campaignPage, pageNumber)
-  if (nextPage === null || nextPage === campaignStore.campaignPage.page) return
+  const nextPage = boundedPage(campaignState().campaignPage, pageNumber)
+  if (nextPage === null || nextPage === campaignState().campaignPage.page) return
   loadCampaigns(nextPage)
 }
 
 export function changeCampaignPageSize(size: number | string): void {
   const nextSize = Number(size)
   if (!nextSize) return
-  campaignStore.campaignPage.size = nextSize
+  campaignState().campaignPage.size = nextSize
   loadCampaigns(0)
 }

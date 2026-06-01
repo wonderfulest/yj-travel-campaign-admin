@@ -1,32 +1,36 @@
-import { appStore } from './useAppStore.ts'
-import { customerStore, loadCustomerSummary, loadCustomers, loadMappingPreview, loadTenantApiSecretStatus } from './useCustomerStore.ts'
-import { loadChannels } from './useChannelStore.ts'
-import { loadCampaigns } from './useCampaignStore.ts'
-import { loadSegmentMembers, loadSegments, loadSegmentSummary, segmentStore } from './useSegmentStore.ts'
-import { loadTrackingAnalytics } from './useTrackingStore.ts'
+import { useAppStore } from './useAppStore'
+import { loadCustomerSummary, loadCustomers, loadMappingPreview, loadTenantApiSecretStatus, useCustomerStore } from './useCustomerStore'
+import { loadChannels } from './useChannelStore'
+import { loadCampaigns } from './useCampaignStore'
+import { loadSegmentMembers, loadSegments, loadSegmentSummary, useSegmentStore } from './useSegmentStore'
+import { loadTrackingAnalytics } from './useTrackingStore'
+
+const appState = () => useAppStore()
+const customerState = () => useCustomerStore()
+const segmentState = () => useSegmentStore()
 
 export async function refreshAll(): Promise<void> {
-  switch (appStore.activeNav) {
+  switch (appState().activeNav) {
     case 'dashboard':
       await Promise.allSettled([loadCustomerSummary(), loadSegmentSummary()])
       return
     case 'customers':
-      if (appStore.customerTool === 'imports') {
+      if (appState().customerTool === 'imports') {
         await loadTenantApiSecretStatus()
         return
       }
-      if (appStore.customerTool === 'mapping') {
+      if (appState().customerTool === 'mapping') {
         await loadMappingPreview()
         return
       }
-      await loadCustomers(customerStore.customerPage.page)
+      await loadCustomers(customerState().customerPage.page)
       return
     case 'channels':
       await loadChannels()
       return
     case 'segments':
       await loadSegments()
-      if (segmentStore.selectedSegment?.id) {
+      if (segmentState().selectedSegment?.id) {
         await loadSegmentMembers()
       }
       return

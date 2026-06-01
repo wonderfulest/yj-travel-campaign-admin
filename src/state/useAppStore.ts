@@ -1,8 +1,7 @@
 import { computed } from 'vue'
 import { defineStore } from 'pinia'
-import type { AuthForm, AuthMode, User, UserRole } from '../types.ts'
-import { authApi } from '../api/auth.ts'
-import { pinia } from './pinia.ts'
+import type { AuthForm, AuthMode, User, UserRole } from '../types'
+import { authApi } from '../api/auth'
 import {
   BarChart3,
   CheckCircle2,
@@ -15,13 +14,11 @@ import {
   Settings,
   Users
 } from 'lucide-vue-next'
-import router from '../router'
 import {
   ACTIVE_NAV_STORAGE_KEY,
   ADMIN_NAV_QUERY_KEY,
   CUSTOMER_TOOL_STORAGE_KEY,
   CUSTOMER_TOOLS,
-  navToPath,
   normalizeCustomerTool,
   resolveNavigationFromLocation
 } from '../navigation'
@@ -81,40 +78,103 @@ export const useAppStore = defineStore('app', {
   },
   actions: {
     normalizeActiveNavAccess() {
-      return normalizeActiveNavAccess(this)
+      if (canAccessNav(this.activeNav, this)) {
+        if (this.activeNav !== 'customers') {
+          this.setCustomerToolState('list')
+        } else if (!canAccessNav(this.customerTool, this)) {
+          this.setCustomerToolState('list')
+        } else {
+          this.persistNavigationState()
+        }
+        return
+      }
+      this.activateNav('dashboard')
+      if (this.activeNav !== 'customers') {
+        this.setCustomerToolState('list')
+      }
     },
     persistNavigationState() {
-      return persistNavigationState(this)
+      localStorage.setItem(ACTIVE_NAV_STORAGE_KEY, this.activeNav)
+      localStorage.setItem(CUSTOMER_TOOL_STORAGE_KEY, this.customerTool)
     },
     activateNav(nav: string) {
-      return activateNav(nav, this)
+      this.activeNav = nav
+      this.persistNavigationState()
     },
     setCustomerToolState(tool: string) {
-      return setCustomerToolState(tool, this)
+      this.customerTool = normalizeCustomerTool(tool)
+      this.persistNavigationState()
     },
     setActiveNav(nav: string, onNavSideEffect?: (nav: string) => void) {
-      return setActiveNav(nav, this, onNavSideEffect)
+      this.activeNav = nav
+      this.persistNavigationState()
+      onNavSideEffect?.(nav)
     },
     navChildItems(parentKey: string) {
-      return navChildItems(parentKey, this)
+      return navItems.filter((item) => item.parentKey === parentKey && canAccessNav(item.key, this))
     },
     isNavItemActive(item: { key: string }) {
-      return isNavItemActive(item, this)
+      if (this.activeNav === item.key) return true
+      return this.navChildItems(item.key).some((child) => child.key === this.activeNav)
     },
     toggleSidebar() {
-      return toggleSidebar(this)
+      this.sidebarCollapsed = !this.sidebarCollapsed
+      localStorage.setItem('travel_admin_sidebar_collapsed', String(this.sidebarCollapsed))
     },
     syncNavigationFromRoute(pathname: string, queryNav = '') {
-      return syncNavigationFromRoute(pathname, queryNav, this)
+      const { nav, customerTool } = resolveNavigationFromLocation(pathname, queryNav)
+      this.activeNav = nav
+      this.customerTool = normalizeCustomerTool(customerTool)
+      this.persistNavigationState()
     },
     persistSession(result: { accessToken: string; email: string; tenantId: string | number; userId: string | number; roles?: UserRole[] }) {
-      return persistSession(result, this)
+      this.token = result.accessToken
+      this.user = {
+        email: result.email,
+        tenantId: result.tenantId,
+        userId: result.userId,
+        roles: result.roles || []
+      }
+      localStorage.setItem('travel_admin_token', this.token)
+      localStorage.setItem('travel_admin_user', JSON.stringify(this.user))
+      this.normalizeActiveNavAccess()
     },
-    login(onSuccess?: () => Promise<void>) {
-      return login(onSuccess, this)
+    async login(onSuccess?: () => Promise<void>) {
+      this.loading = true
+      this.error = ''
+      this.notice = ''
+      try {
+        if (this.authMode === 'register') {
+          await authApi.register({
+            tenantName: this.authForm.tenantName,
+            displayName: this.authForm.displayName,
+            email: this.authForm.email,
+            password: this.authForm.password
+          })
+        }
+        const result = await authApi.login({
+          email: this.authForm.email,
+          password: this.authForm.password
+        })
+        this.persistSession(result)
+        await onSuccess?.()
+        this.notice = '已进入租户后台'
+      } catch (error: unknown) {
+        const err = error as { message?: string }
+        this.error = `认证失败：${err.message}`
+      } finally {
+        this.loading = false
+      }
     },
     logout() {
-      return logout(this)
+      this.token = ''
+      this.user = null
+      this.setCustomerToolState('list')
+      this.activeNav = 'dashboard'
+      localStorage.removeItem('travel_admin_token')
+      localStorage.removeItem('travel_admin_user')
+      localStorage.removeItem(ACTIVE_NAV_STORAGE_KEY)
+      localStorage.removeItem(CUSTOMER_TOOL_STORAGE_KEY)
     },
     canAccessNav(nav: string) {
       return canAccessNav(nav, this)
@@ -122,7 +182,7 @@ export const useAppStore = defineStore('app', {
   }
 })
 
-export const appStore = useAppStore(pinia)
+const appState = () => useAppStore()
 
 
 export const navItems = [
@@ -197,11 +257,11 @@ export const ROLE_LABELS = {
   TENANT_USER: '租户成员'
 }
 
-export function currentRoles(store: ReturnType<typeof useAppStore> = appStore): UserRole[] {
+export function currentRoles(store: ReturnType<typeof useAppStore> = appState()): UserRole[] {
   return store.user?.roles?.length ? store.user.roles as UserRole[] : ['TENANT_OWNER']
 }
 
-export function canAccessNav(nav: string, store: ReturnType<typeof useAppStore> = appStore): boolean {
+export function canAccessNav(nav: string, store: ReturnType<typeof useAppStore> = appState()): boolean {
   return currentRoles(store).some((role) => ROLE_PAGE_ACCESS[role as keyof typeof ROLE_PAGE_ACCESS]?.includes(nav))
 }
 
@@ -213,7 +273,6 @@ export function persistNavigationState(store: ReturnType<typeof useAppStore>) {
 export function activateNav(nav: string, store: ReturnType<typeof useAppStore>): void {
   store.activeNav = nav
   persistNavigationState(store)
-  void router.push(navToPath(nav, store.customerTool)).catch(() => {})
 }
 
 export function setCustomerToolState(tool: string, store: ReturnType<typeof useAppStore>): void {
@@ -272,7 +331,7 @@ export function persistSession(result: { accessToken: string; email: string; ten
   normalizeActiveNavAccess(store)
 }
 
-export async function login(onSuccess?: () => Promise<void>, store: ReturnType<typeof useAppStore> = appStore): Promise<void> {
+export async function login(onSuccess?: () => Promise<void>, store: ReturnType<typeof useAppStore> = appState()): Promise<void> {
   store.loading = true
   store.error = ''
   store.notice = ''
@@ -292,7 +351,6 @@ export async function login(onSuccess?: () => Promise<void>, store: ReturnType<t
     persistSession(result, store)
     await onSuccess?.()
     store.notice = '已进入租户后台'
-    void router.replace(navToPath(store.activeNav, store.customerTool)).catch(() => {})
   } catch (error: unknown) {
     const err = error as { message?: string }
     store.error = `认证失败：${err.message}`
@@ -310,10 +368,9 @@ export function logout(store: ReturnType<typeof useAppStore>): void {
   localStorage.removeItem('travel_admin_user')
   localStorage.removeItem(ACTIVE_NAV_STORAGE_KEY)
   localStorage.removeItem(CUSTOMER_TOOL_STORAGE_KEY)
-  void router.replace('/login').catch(() => {})
 }
 
-export function setActiveNav(nav: string, store: ReturnType<typeof useAppStore> = appStore, onNavSideEffect?: (nav: string) => void): void {
+export function setActiveNav(nav: string, store: ReturnType<typeof useAppStore> = appState(), onNavSideEffect?: (nav: string) => void): void {
   store.activeNav = nav
   persistNavigationState(store)
   onNavSideEffect?.(nav)

@@ -1,4 +1,4 @@
-import type { PageResult } from '../types.ts'
+import type { PageResult } from '../types'
 
 export const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
 
