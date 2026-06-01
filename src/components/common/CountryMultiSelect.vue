@@ -54,8 +54,9 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import { X } from 'lucide-vue-next'
-import * as admin from '../../state/index'
+import { loadDictionaryCountries, useCustomerStore } from '../../state/useCustomerStore'
 
 interface CountryValue {
   id: string
@@ -85,9 +86,11 @@ const rootRef = ref<HTMLElement | null>(null)
 const query = ref('')
 const menuOpen = ref(false)
 const menuIndex = ref(0)
+const customerStore = useCustomerStore()
+const { dictionary } = storeToRefs(customerStore)
 
-const loading = computed(() => admin.state.dictionary.loading)
-const countries = computed<CountryValue[]>(() => admin.state.dictionary.countries)
+const loading = computed(() => dictionary.value.loading)
+const countries = computed<CountryValue[]>(() => dictionary.value.countries)
 const selectedCountries = computed(() => countries.value.filter((country) => props.modelValue.includes(country.id)))
 
 const filteredCountries = computed(() => {
@@ -97,7 +100,7 @@ const filteredCountries = computed(() => {
 })
 
 onMounted(() => {
-  admin.loadDictionaryCountries()
+  loadDictionaryCountries()
   document.addEventListener('click', handleOutsideClick, true)
 })
 

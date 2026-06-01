@@ -162,17 +162,35 @@
         </section>
 </template>
 <script setup lang="ts">
+import { onMounted, proxyRefs } from 'vue'
+import { storeToRefs } from 'pinia'
 import { BarChart3, CheckCircle2, ExternalLink, Eye, Layers, RefreshCw, Users } from 'lucide-vue-next'
-import * as admin from '../../state/index'
-
-const {
-  state,
-  canAccessNav,
-  loadTrackingAnalytics,
-  percentValue,
-  jumpTrackingEventPage,
+import { canAccessNav as canAccessAppNav, useAppStore } from '../../state/useAppStore'
+import { useCampaignStore } from '../../state/useCampaignStore'
+import {
   changeTrackingEventPage,
+  changeTrackingLinkPage,
+  jumpTrackingEventPage,
   jumpTrackingLinkPage,
-  changeTrackingLinkPage
-} = admin
+  loadTrackingAnalytics,
+  useTrackingStore
+} from '../../state/useTrackingStore'
+import { percentValue } from '../../utils/format'
+
+const appStore = useAppStore()
+const campaignStore = useCampaignStore()
+const trackingStore = useTrackingStore()
+const state = proxyRefs({
+  ...storeToRefs(appStore),
+  ...storeToRefs(campaignStore),
+  ...storeToRefs(trackingStore)
+})
+
+function canAccessNav(nav: string): boolean {
+  return canAccessAppNav(nav, appStore)
+}
+
+onMounted(() => {
+  void loadTrackingAnalytics()
+})
 </script>

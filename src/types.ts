@@ -104,6 +104,18 @@ export interface LoginResult {
   roles?: UserRole[]
 }
 
+export interface TenantApiSecretStatus {
+  tenantId: string
+  configured: boolean
+  lastRotatedAt?: string
+}
+
+export interface TenantApiSecretRotationResult {
+  tenantId: string
+  secretKey: string
+  rotatedAt: string
+}
+
 // ==================== 客户资产 ====================
 
 export interface Customer {
@@ -123,6 +135,13 @@ export interface Customer {
   street?: string
   houseNumber?: string
   businessScope?: string
+}
+
+export interface CustomerSegmentMember extends Partial<Customer> {
+  memberId: string
+  customerId: string
+  customerName: string
+  matchedAt?: string
 }
 
 export interface CustomerProfile {
@@ -372,8 +391,12 @@ export interface MappingResult {
 }
 
 export interface ImportResult {
-  importedCount: number
-  errors?: string[]
+  importedCount?: number
+  totalCount?: number
+  successCount?: number
+  duplicateCount?: number
+  failedCount?: number
+  errors?: Array<string | { index?: number; externalId?: string; message?: string }>
 }
 
 // ==================== 字典数据 ====================

@@ -1,5 +1,6 @@
 import { computed } from 'vue'
 import { defineStore } from 'pinia'
+import { pinia } from './pinia.ts'
 import type {
   City,
   ContactStatus,
@@ -13,10 +14,18 @@ import type {
   ImportResult,
   MappingPreview,
   MappingResult,
-  PageResult,
-  SummaryStatItem
+  SummaryStatItem,
+  TenantApiSecretRotationResult,
+  TenantApiSecretStatus
 } from '../types.ts'
-import { request, appStore } from './appContext.ts'
+import { customersApi } from '../api/customers.ts'
+import { appStore } from './useAppStore.ts'
+import { API_BASE } from '../api/client.ts'
+import { boundedPage, emptyPageResult, normalizePageResult, pageQuery } from '../utils/pagination.ts'
+
+export { PAGE_SIZE_OPTIONS, localPageResult } from '../utils/pagination.ts'
+
+export const CUSTOMER_API_IMPORT_PATH = '/api/imports/customers-json/api'
 
 export const useCustomerStore = defineStore('customer', {
   state: () => ({
@@ -43,6 +52,8 @@ export const useCustomerStore = defineStore('customer', {
     mappingResult: null as MappingResult | null,
     importFile: null as File | null,
     importResult: null as ImportResult | null,
+    tenantApiSecretStatus: null as TenantApiSecretStatus | null,
+    tenantApiSecretKey: '',
     dictionary: {
       countries: [] as Country[],
       citiesCache: {} as Record<string, City[]>,
@@ -52,7 +63,7 @@ export const useCustomerStore = defineStore('customer', {
   })
 })
 
-export const customerStore = useCustomerStore()
+export const customerStore = useCustomerStore(pinia)
 
 export const filteredCustomers = computed(() => {
   const keyword = customerStore.filter.trim().toLowerCase()
@@ -244,7 +255,7 @@ export async function loadCustomerProfile(customer: Customer | null = customerSt
   if (!customer?.id) return
   customerStore.customerProfileLoading = true
   try {
-    customerStore.customerProfile = await request(`/api/customers/${customer.id}/asset-profile`) as CustomerProfile
+    customerStore.customerProfile = await customersApi.getAssetProfile(customer.id)
     if (customerStore.customerProfile?.asset) {
       customerStore.selectedCustomer = customerStore.customerProfile.asset
       replaceCustomer(customerStore.customerProfile.asset)
@@ -269,7 +280,7 @@ export async function loadCustomerProfile(customer: Customer | null = customerSt
 
 export async function loadCustomerSummary(): Promise<void> {
   try {
-    customerStore.customerSummary = await request('/api/customers/summary')
+    customerStore.customerSummary = await customersApi.getSummary()
   } catch (error) {
     customerStore.customerSummary = null
     appStore.error = `客户统计加载失败：${error.message}`
@@ -278,7 +289,7 @@ export async function loadCustomerSummary(): Promise<void> {
 
 export async function loadCustomers(page = customerStore.customerPage.page): Promise<void> {
   try {
-    const result = await request(`/api/customers?${pageQuery(customerStore.customerPage, page)}`)
+    const result = await customersApi.list(pageQuery(customerStore.customerPage, page))
     const pageResult = normalizePageResult<Customer>(result, [], page, customerStore.customerPage.size)
     customerStore.customers = pageResult.items
     customerStore.customerPage = pageResult
@@ -302,14 +313,8 @@ export async function saveCustomerEdit(): Promise<void> {
   try {
     const body = { ...customerStore.customerEditForm }
     const updated = customerStore.customerCreateMode
-      ? await request('/api/customers', {
-          method: 'POST',
-          body: JSON.stringify(body)
-        }) as Customer
-      : await request(`/api/customers/${customerStore.selectedCustomer!.id}`, {
-          method: 'PUT',
-          body: JSON.stringify(body)
-        }) as Customer
+      ? await customersApi.create(body)
+      : await customersApi.update(customerStore.selectedCustomer!.id, body)
     if (customerStore.customerCreateMode) {
       addCustomer(updated)
     } else {
@@ -337,10 +342,7 @@ export async function updateEmailQuality(customer: Customer, quality: EmailQuali
   appStore.error = ''
   appStore.notice = ''
   try {
-    const updated = await request(`/api/customers/${customer.id}/email-quality`, {
-      method: 'PATCH',
-      body: JSON.stringify({ emailQuality: quality })
-    }) as Customer
+    const updated = await customersApi.updateEmailQuality(customer.id, quality)
     replaceCustomer(updated)
     await loadCustomerSummary()
     appStore.notice = `邮箱状态已更新为 ${quality}`
@@ -370,24 +372,31 @@ export function changeCustomerPageSize(size: number | string): void {
   loadCustomers(0)
 }
 
-export async function importCustomerJson(onSuccess?: () => void): Promise<void> {
+export async function importCustomerFile(importType: 'json' | 'excel', onSuccess?: () => void): Promise<void> {
   if (!customerStore.importFile) {
-    appStore.error = '请选择客户 JSON 文件'
+    appStore.error = importType === 'excel' ? '请选择客户 Excel 文件' : '请选择客户 JSON 文件'
     return
   }
+  const fileName = customerStore.importFile.name.toLowerCase()
+  if (importType === 'excel' && !fileName.endsWith('.xlsx')) {
+    appStore.error = 'Excel 文件导入只支持 .xlsx 文件'
+    return
+  }
+  if (importType === 'json' && !fileName.endsWith('.json')) {
+    appStore.error = 'JSON 导入只支持 .json 文件'
+    return
+  }
+  const importLabel = importType === 'excel' ? 'Excel' : 'JSON'
   appStore.loading = true
   appStore.error = ''
   appStore.notice = ''
   try {
     const form = new FormData()
     form.append('file', customerStore.importFile)
-    customerStore.importResult = await request('/api/imports/customers-json', {
-      method: 'POST',
-      body: form
-    }) as ImportResult
+    customerStore.importResult = await customersApi.importFile(importType, form)
     await Promise.allSettled([loadCustomers(), loadCustomerSummary()])
     onSuccess?.()
-    appStore.notice = '客户 JSON 导入完成，已写入来源与客户资产主表'
+    appStore.notice = `客户 ${importLabel} 导入完成，已写入来源与客户资产主表`
   } catch (error: unknown) {
     const err = error as { message?: string }
     appStore.error = `导入失败：${err.message}`
@@ -396,9 +405,67 @@ export async function importCustomerJson(onSuccess?: () => void): Promise<void> 
   }
 }
 
+export async function importCustomerJson(onSuccess?: () => void): Promise<void> {
+  return importCustomerFile('json', onSuccess)
+}
+
+export async function downloadCustomerExcelTemplate(): Promise<void> {
+  appStore.error = ''
+  try {
+    const response = await fetch(`${API_BASE}/api/imports/customers-excel-template`, {
+      headers: appStore.token ? { Authorization: `Bearer ${appStore.token}` } : {}
+    })
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`)
+    }
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'customer-import-template.xlsx'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    appStore.error = `模板下载失败：${err.message}`
+  }
+}
+
+export async function loadTenantApiSecretStatus(): Promise<void> {
+  try {
+    customerStore.tenantApiSecretStatus = await customersApi.getTenantApiSecret()
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    appStore.error = `接口导入密钥状态加载失败：${err.message}`
+  }
+}
+
+export async function rotateTenantApiSecret(): Promise<void> {
+  appStore.loading = true
+  appStore.error = ''
+  appStore.notice = ''
+  try {
+    const result = await customersApi.rotateTenantApiSecret()
+    customerStore.tenantApiSecretKey = result.secretKey
+    customerStore.tenantApiSecretStatus = {
+      tenantId: result.tenantId,
+      configured: true,
+      lastRotatedAt: result.rotatedAt
+    }
+    appStore.notice = '租户接口导入 Secret Key 已生成，请立即保存'
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    appStore.error = `Secret Key 生成失败：${err.message}`
+  } finally {
+    appStore.loading = false
+  }
+}
+
 export async function loadMappingPreview(): Promise<void> {
   try {
-    customerStore.mappingPreview = await request('/api/customer-mapping/osm/preview') as MappingPreview
+    customerStore.mappingPreview = await customersApi.getMappingPreview()
   } catch (error: unknown) {
     const err = error as { message?: string }
     customerStore.mappingPreview = null
@@ -411,10 +478,7 @@ export async function runOsmMapping(): Promise<void> {
   appStore.error = ''
   appStore.notice = ''
   try {
-    customerStore.mappingResult = await request('/api/customer-mapping/osm', {
-      method: 'POST',
-      body: JSON.stringify({})
-    }) as MappingResult
+    customerStore.mappingResult = await customersApi.runOsmMapping()
     await Promise.allSettled([loadCustomers(), loadCustomerSummary(), loadMappingPreview()])
     appStore.notice = 'OSM 来源已 mapping 到客户资产主表'
   } catch (error: unknown) {
@@ -435,7 +499,7 @@ export async function loadDictionaryCountries(): Promise<void> {
   customerStore.dictionary.loading = true
   customerStore.dictionary.error = ''
   try {
-    const countries = await request('/api/dictionary/countries') as Country[]
+    const countries = await customersApi.getCountries()
     customerStore.dictionary.countries = countries || []
   } catch (error: unknown) {
     const err = error as { message?: string }
@@ -452,7 +516,7 @@ export async function loadDictionaryCities(countryId: string): Promise<void> {
   customerStore.dictionary.loading = true
   customerStore.dictionary.error = ''
   try {
-    const cities = await request(`/api/dictionary/cities?countryId=${encodeURIComponent(countryId)}`) as City[]
+    const cities = await customersApi.getCities(countryId)
     customerStore.dictionary.citiesCache[countryId] = cities || []
   } catch (error: unknown) {
     const err = error as { message?: string }
@@ -471,93 +535,4 @@ export function clearDictionaryCache(): void {
   customerStore.dictionary.countries = []
   customerStore.dictionary.citiesCache = {}
   customerStore.dictionary.error = ''
-}
-
-export const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
-
-interface PageInfo {
-  page: number
-  size: number
-}
-
-export function pageQuery(pageInfo: PageInfo, nextPage = pageInfo.page): string {
-  const params = new URLSearchParams({
-    page: String(Math.max(0, nextPage)),
-    size: String(pageInfo.size)
-  })
-  return params.toString()
-}
-
-export function boundedPage(pageInfo: { totalPages?: number }, pageNumber: number | string): number | null {
-  const value = Number(pageNumber)
-  if (!Number.isFinite(value)) return null
-  const totalPages = Number(pageInfo.totalPages || 0)
-  if (!totalPages) return null
-  return Math.min(Math.max(Math.trunc(value) - 1, 0), totalPages - 1)
-}
-
-export function emptyPageResult<T>(page = 0, size = 20): PageResult<T> {
-  return {
-    items: [],
-    page,
-    size,
-    totalItems: 0,
-    totalPages: 0,
-    hasNext: false,
-    hasPrevious: false
-  }
-}
-
-interface PageResultLike<T> {
-  items?: T[]
-  page?: number
-  size?: number
-  totalItems?: number
-  totalPages?: number
-  hasNext?: boolean
-  hasPrevious?: boolean
-}
-
-export function normalizePageResult<T>(result: T[] | PageResultLike<T> | null | undefined, fallbackItems: T[] = [], fallbackPage = 0, fallbackSize = 20): PageResult<T> {
-  if (Array.isArray(result)) {
-    return {
-      items: result,
-      page: fallbackPage,
-      size: fallbackSize,
-      totalItems: result.length,
-      totalPages: result.length ? 1 : 0,
-      hasNext: false,
-      hasPrevious: false
-    }
-  }
-  const items = Array.isArray(result?.items) ? result.items : fallbackItems
-  const size = Number(result?.size || fallbackSize)
-  const totalItems = Number(result?.totalItems ?? items.length)
-  return {
-    items,
-    page: Number(result?.page || 0),
-    size,
-    totalItems,
-    totalPages: Number(result?.totalPages ?? (totalItems ? Math.ceil(totalItems / size) : 0)),
-    hasNext: Boolean(result?.hasNext),
-    hasPrevious: Boolean(result?.hasPrevious)
-  }
-}
-
-export function localPageResult<T>(items: T[], page = 0, size = 20): PageResult<T> {
-  const safeSize = Number(size) > 0 ? Number(size) : 20
-  const safePage = Math.max(0, Number(page) || 0)
-  const totalItems = items.length
-  const totalPages = totalItems ? Math.ceil(totalItems / safeSize) : 0
-  const currentPage = totalPages ? Math.min(safePage, totalPages - 1) : 0
-  const fromIndex = currentPage * safeSize
-  return {
-    items: items.slice(fromIndex, fromIndex + safeSize),
-    page: currentPage,
-    size: safeSize,
-    totalItems,
-    totalPages,
-    hasNext: currentPage + 1 < totalPages,
-    hasPrevious: currentPage > 0
-  }
 }

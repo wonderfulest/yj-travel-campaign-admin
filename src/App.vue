@@ -1,19 +1,19 @@
 <template>
     <RouterView v-if="!isLoggedIn" />
 
-    <main v-else class="app-shell" :class="{'sidebar-collapsed': state.sidebarCollapsed}">
+    <main v-else class="app-shell" :class="{'sidebar-collapsed': sidebarCollapsed}">
       <AppSidebar />
 
       <section class="workspace">
         <AppTopbar />
 
-        <p v-if="state.notice" class="message success">{{ state.notice }}</p>
-        <p v-if="state.error" class="message error">{{ state.error }}</p>
+        <p v-if="notice" class="message success">{{ notice }}</p>
+        <p v-if="error" class="message error">{{ error }}</p>
 
         <RouterView />
 
         <CustomerHelpPanel
-          v-if="state.customerHelpVisible"
+          v-if="customerHelpVisible"
         />
 
         <CampaignDialogs />
@@ -21,11 +21,32 @@
     </main>
 </template>
 <script setup lang="ts">
+import { computed, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { storeToRefs } from 'pinia'
 import AppSidebar from './layout/AppSidebar.vue'
 import AppTopbar from './layout/AppTopbar.vue'
 import CampaignDialogs from './views/campaigns/CampaignDialogs.vue'
 import CustomerHelpPanel from './components/common/CustomerHelpPanel.vue'
-import * as admin from './state/index'
+import { useAppStore } from './state/useAppStore'
+import { useCustomerStore } from './state/useCustomerStore'
+import { refreshAll } from './state/refresh'
 
-const { state, isLoggedIn } = admin
+const appStore = useAppStore()
+const customerStore = useCustomerStore()
+const { sidebarCollapsed, notice, error } = storeToRefs(appStore)
+const { customerHelpVisible } = storeToRefs(customerStore)
+const isLoggedIn = computed(() => appStore.isLoggedIn)
+
+const route = useRoute()
+
+watch(
+  () => route.fullPath,
+  () => {
+    if (!isLoggedIn.value) return
+    const queryNav = typeof route.query.nav === 'string' ? route.query.nav : ''
+    appStore.syncNavigationFromRoute(route.path, queryNav)
+    void refreshAll()
+  }
+)
 </script>

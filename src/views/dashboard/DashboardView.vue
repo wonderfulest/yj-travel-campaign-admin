@@ -149,21 +149,31 @@
     </section>
 </template>
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import { CheckCircle2, Globe2, Layers, Send } from 'lucide-vue-next'
 import StatGrid from '../../components/common/StatGrid.vue'
-import * as admin from '../../state/index'
-
-const {
+import {
+  formatCountryShare,
+  loadCustomerSummary
+} from '../../state/useCustomerStore'
+import {
+  loadSegmentSummary,
+  segmentReadinessBars,
+  segmentReadinessStats
+} from '../../state/useSegmentStore'
+import {
   customerQualityStats,
   customerContactStats,
   customerReachabilityStats,
   customerCountryStats,
   qualityDonut,
   reachabilityDonut,
-  segmentReadinessStats,
-  segmentReadinessBars,
   statusLabel,
-  formatCountryShare,
-  setActiveNav
-} = admin
+  uiSetActiveNav as setActiveNav
+} from '../../state/useUiStore'
+
+onMounted(() => {
+  void loadCustomerSummary()
+  void loadSegmentSummary()
+})
 </script>

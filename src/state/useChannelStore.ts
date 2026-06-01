@@ -1,7 +1,9 @@
 import { defineStore } from 'pinia'
+import { pinia } from './pinia.ts'
 import type { AwsSesForm, Channel, SmtpForm } from '../types.ts'
-import { request, appStore } from './appContext.ts'
-import { normalizePageResult, emptyPageResult, pageQuery, boundedPage } from './useCustomerStore.ts'
+import { channelsApi } from '../api/channels.ts'
+import { appStore } from './useAppStore.ts'
+import { boundedPage, normalizePageResult, pageQuery } from '../utils/pagination.ts'
 
 function defaultSmtpForm(): SmtpForm {
   return {
@@ -48,11 +50,11 @@ export const useChannelStore = defineStore('channel', {
   })
 })
 
-export const channelStore = useChannelStore()
+export const channelStore = useChannelStore(pinia)
 
 export async function loadChannels(page = channelStore.channelPage.page): Promise<void> {
   try {
-    const result = await request(`/api/channels?${pageQuery(channelStore.channelPage, page)}`)
+    const result = await channelsApi.list(pageQuery(channelStore.channelPage, page))
     const pageResult = normalizePageResult<Channel>(result, [], page, channelStore.channelPage.size)
     channelStore.channels = pageResult.items
     channelStore.channelPage = pageResult
@@ -70,20 +72,10 @@ export async function saveChannel(): Promise<void> {
   appStore.notice = ''
   try {
     const isSmtp = channelStore.channelType === 'smtp'
-    const path = channelStore.editingChannelId
-      ? isSmtp
-        ? `/api/channels/email/smtp/${channelStore.editingChannelId}`
-        : `/api/channels/email/aws-ses/${channelStore.editingChannelId}`
-      : isSmtp
-        ? '/api/channels/email/smtp'
-        : '/api/channels/email/aws-ses'
     const payload = isSmtp
       ? { ...channelStore.smtpForm, smtpPort: Number(channelStore.smtpForm.smtpPort) }
       : channelStore.awsSesForm
-    await request(path, {
-      method: channelStore.editingChannelId ? 'PUT' : 'POST',
-      body: JSON.stringify(payload)
-    })
+    await channelsApi.save(channelStore.channelType, channelStore.editingChannelId, payload)
     await loadChannels()
     const wasEditing = Boolean(channelStore.editingChannelId)
     channelStore.editingChannelId = null
@@ -151,9 +143,7 @@ export async function deleteChannel(channel: Channel): Promise<void> {
   appStore.error = ''
   appStore.notice = ''
   try {
-    await request(`/api/channels/${channel.id}`, {
-      method: 'DELETE'
-    })
+    await channelsApi.remove(channel)
     const nextPage = channelStore.channels.length === 1 && channelStore.channelPage.page > 0
       ? channelStore.channelPage.page - 1
       : channelStore.channelPage.page

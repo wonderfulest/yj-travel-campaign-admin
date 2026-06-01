@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { pinia } from './pinia.ts'
 import type {
   TrackingEvent,
   TrackingFilter,
@@ -7,8 +8,9 @@ import type {
   TrackingTimeseriesPoint,
   TrackingUtmStat
 } from '../types.ts'
-import { request, appStore } from './appContext.ts'
-import { normalizePageResult, emptyPageResult, boundedPage } from './useCustomerStore.ts'
+import { trackingApi } from '../api/tracking.ts'
+import { appStore } from './useAppStore.ts'
+import { boundedPage, emptyPageResult, normalizePageResult } from '../utils/pagination.ts'
 
 export const useTrackingStore = defineStore('tracking', {
   state: () => ({
@@ -44,27 +46,27 @@ export const useTrackingStore = defineStore('tracking', {
   })
 })
 
-export const trackingStore = useTrackingStore()
+export const trackingStore = useTrackingStore(pinia)
 
 export async function loadTrackingAnalytics(page = trackingStore.trackingEventPage.page, linkPage = trackingStore.trackingLinkPage.page): Promise<void> {
   try {
     const params = new URLSearchParams()
     if (trackingStore.trackingFilter.campaignId) params.set('campaignId', trackingStore.trackingFilter.campaignId)
     const querySuffix = params.toString() ? `?${params}` : ''
-    trackingStore.trackingSummary = await request(`/api/tracking/analytics/summary${querySuffix}`) as TrackingSummary
-    trackingStore.trackingTimeseries = await request(`/api/tracking/analytics/timeseries${querySuffix}`) as TrackingTimeseriesPoint[]
-    trackingStore.trackingUtmStats = await request(`/api/tracking/analytics/by-utm${querySuffix}`) as TrackingUtmStat[]
+    trackingStore.trackingSummary = await trackingApi.summary(querySuffix)
+    trackingStore.trackingTimeseries = await trackingApi.timeseries(querySuffix)
+    trackingStore.trackingUtmStats = await trackingApi.byUtm(querySuffix)
     const linkParams = new URLSearchParams(params)
     linkParams.set('page', String(Math.max(0, linkPage)))
     linkParams.set('size', String(trackingStore.trackingLinkPage.size))
-    const linkResult = await request(`/api/tracking/analytics/by-link?${linkParams}`)
+    const linkResult = await trackingApi.byLink(linkParams.toString())
     const linkPageResult = normalizePageResult<TrackingLinkStat>(linkResult, [], linkPage, trackingStore.trackingLinkPage.size)
     trackingStore.trackingLinkStats = linkPageResult.items
     trackingStore.trackingLinkPage = linkPageResult
     const eventParams = new URLSearchParams(params)
     eventParams.set('page', String(Math.max(0, page)))
     eventParams.set('size', String(trackingStore.trackingEventPage.size))
-    const eventResult = await request(`/api/tracking/analytics/events?${eventParams}`)
+    const eventResult = await trackingApi.events(eventParams.toString())
     const pageResult = normalizePageResult<TrackingEvent>(eventResult, [], page, trackingStore.trackingEventPage.size)
     trackingStore.trackingEvents = pageResult.items
     trackingStore.trackingEventPage = pageResult

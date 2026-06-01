@@ -75,12 +75,20 @@
         </section>
 </template>
 <script setup lang="ts">
+import { onMounted, proxyRefs } from 'vue'
+import { storeToRefs } from 'pinia'
 import { GitMerge } from 'lucide-vue-next'
-import * as admin from '../../state/index'
+import { useAppStore } from '../../state/useAppStore'
+import { loadMappingPreview, runOsmMapping, useCustomerStore } from '../../state/useCustomerStore'
 
-const {
-  state,
-  loadMappingPreview,
-  runOsmMapping
-} = admin
+const appStore = useAppStore()
+const customerStore = useCustomerStore()
+const state = proxyRefs({
+  ...storeToRefs(appStore),
+  ...storeToRefs(customerStore)
+})
+
+onMounted(() => {
+  void loadMappingPreview()
+})
 </script>

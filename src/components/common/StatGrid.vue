@@ -6,7 +6,7 @@
         :key="item.label"
         class="stat-card"
         type="button"
-        :disabled="!canAccessNav(item.target)"
+        :disabled="!canAccessNav(item.target, appStore)"
         @click="openStatTarget(item)"
       >
         <component :is="item.icon" :size="20" />
@@ -16,7 +16,8 @@
     </section>
 </template>
 <script setup lang="ts">
-import * as admin from '../../state/index'
+import { canAccessNav, useAppStore } from '../../state/useAppStore'
+import { openStatTarget, stats } from '../../state/useUiStore'
 
-const { stats, canAccessNav, openStatTarget } = admin
+const appStore = useAppStore()
 </script>

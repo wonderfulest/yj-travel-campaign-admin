@@ -1,6 +1,6 @@
 <template>
 
-<section v-if="canAccessNav('customers') && state.activeNav === 'customers' && state.customerHelpVisible" class="customer-help">
+<section v-if="canAccessNav('customers', appStore) && activeNav === 'customers' && customerHelpVisible" class="customer-help">
           <div>
             <strong>维护顺序</strong>
             <span>先用客户 JSON 导入把公开来源保存为来源数据，再通过合并规则补全客户资产库；OSM 入口仍保留给地图来源导入。</span>
@@ -12,7 +12,12 @@
         </section>
 </template>
 <script setup lang="ts">
-import * as admin from '../../state/index'
+import { storeToRefs } from 'pinia'
+import { canAccessNav, useAppStore } from '../../state/useAppStore'
+import { useCustomerStore } from '../../state/useCustomerStore'
 
-const { state, canAccessNav } = admin
+const appStore = useAppStore()
+const customerStore = useCustomerStore()
+const { activeNav } = storeToRefs(appStore)
+const { customerHelpVisible } = storeToRefs(customerStore)
 </script>

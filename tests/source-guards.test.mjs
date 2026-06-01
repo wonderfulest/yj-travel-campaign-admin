@@ -13,7 +13,24 @@ function readSourceFiles(directoryUrl) {
 }
 
 const source = readSourceFiles(new URL('../src/', import.meta.url)).join('\n')
+const settingsViewSource = readFileSync(new URL('../src/views/settings/SettingsView.vue', import.meta.url), 'utf8')
 const defaultCampaignFormSource = source.match(/function defaultCampaignForm\(\)[\s\S]*?\n\}/)?.[0] || ''
+
+assert(
+  !/setActivePinia\(createPinia\(\)\)/.test(source) &&
+    !/from ['"]\.\/appContext(?:\.ts)?['"]/.test(source) &&
+    !/from ['"]\.\.\/state\/index['"]/.test(source) &&
+    !/from ['"]\.\.\/\.\.\/state\/index['"]/.test(source) &&
+    !/new Proxy\(\{\} as Record<string, unknown>/.test(source),
+  'admin state must use app-installed Pinia stores directly instead of the appContext singleton, state/index barrel wrappers, or merged Proxy state'
+)
+
+assert(
+  /storeToRefs\(appStore\)/.test(settingsViewSource) &&
+    /accessibleNavLabels/.test(settingsViewSource) &&
+    !/availableNavItems\.map/.test(settingsViewSource),
+  'settings page must read Pinia navigation getters through storeToRefs before rendering accessible nav labels'
+)
 
 assert(
   !/catch\s*\{[\s\S]*state\.customers\s*=\s*demoCustomers/.test(source),
@@ -40,7 +57,17 @@ assert(
 )
 
 assert(
-  /async function deleteChannel\(channel[^)]*\)[\s\S]*\/api\/channels\/\$\{channel\.id\}[\s\S]*method: 'DELETE'[\s\S]*await loadChannels\(/.test(source) &&
+  /客群成员[\s\S]*<th>操作<\/th>/.test(source) &&
+    /function segmentMemberCustomer\(member[^)]*\)[\s\S]*id: String\(member\.customerId \|\| member\.id \|\| ''\)[\s\S]*name: member\.customerName \|\| member\.name \|\| ''/.test(source) &&
+    /@click="openCustomerDetail\(segmentMemberCustomer\(member\)\)"/.test(source) &&
+    /@click="openCustomerEdit\(segmentMemberCustomer\(member\)\)"/.test(source) &&
+    /<CustomerAssetDialog @saved="loadSegmentMembers\(\)" \/>/.test(source),
+  'customer segment member rows must support detail and edit actions backed by customer asset dialogs and keep the member list in sync after edits'
+)
+
+assert(
+  /remove\(channel[^)]*\)[\s\S]*\/api\/channels\/\$\{channel\.id\}[\s\S]*method: 'DELETE'/.test(source) &&
+    /async function deleteChannel\(channel[^)]*\)[\s\S]*channelsApi\.remove\(channel\)[\s\S]*await loadChannels\(/.test(source) &&
     /@click="deleteChannel\(channel\)"/.test(source) &&
     /删除/.test(source),
   'push channel page must support deleting configured channels through DELETE /api/channels/{id}'
@@ -49,7 +76,8 @@ assert(
 assert(
   /editingChannelId:\s*null/.test(source) &&
     /function editChannel\(channel[^)]*\)[\s\S]*editingChannelId = channel\.id/.test(source) &&
-    /async function saveChannel\(\)[\s\S]*\/api\/channels\/email\/smtp\/\$\{channelStore\.editingChannelId\}[\s\S]*method: channelStore\.editingChannelId \? 'PUT' : 'POST'/.test(source) &&
+    /function channelSavePath\(channelType[^)]*editingChannelId[^)]*\)[\s\S]*\/api\/channels\/email\/smtp\/\$\{editingChannelId\}[\s\S]*method: editingChannelId \? 'PUT' : 'POST'/.test(source) &&
+    /async function saveChannel\(\)[\s\S]*channelsApi\.save\(channelStore\.channelType, channelStore\.editingChannelId, payload\)/.test(source) &&
     /@click="editChannel\(channel\)"/.test(source) &&
     /cancelChannelEdit/.test(source),
   'push channel page must support editing configured channels through PUT and allow cancelling edit mode'
@@ -105,8 +133,30 @@ assert(
 )
 
 assert(
-  /\/api\/customers\/\$\{customer\.id\}\/email-quality/.test(source),
-  'customer asset page must call the email quality update endpoint'
+  /\/api\/customers\/\$\{id\}\/email-quality/.test(source) &&
+    /customersApi\.updateEmailQuality\(/.test(source),
+  'customer asset page must call the email quality update endpoint via customersApi.updateEmailQuality'
+)
+
+assert(
+  /<strong>{{ customer\.name \|\| "未命名客户" }}<\/strong>[\s\S]*class="customer-website"[\s\S]*:href="normalizedWebsiteUrl\(customer\.website\)"/.test(source) &&
+    !/class="customer-name-link"/.test(source),
+  'customer asset list must keep names as text and render website links below the name'
+)
+
+assert(
+  /<strong>{{ member\.customerName \|\| member\.name \|\| member\.customerId \|\| '未命名客户' }}<\/strong>[\s\S]*class="customer-website"[\s\S]*:href="normalizedWebsiteUrl\(member\.website\)"[\s\S]*{{ formatWebsiteLabel\(member\.website\) }}[\s\S]*<span v-else>{{ member\.phone \|\| '-' }}<\/span>/.test(source),
+  'customer segment member rows must match customer asset list formatting for name, website, and phone'
+)
+
+assert(
+  /客群成员[\s\S]*<th>旅行社<\/th>[\s\S]*<th>邮箱<\/th>[\s\S]*<th>地区<\/th>[\s\S]*<th>状态<\/th>[\s\S]*<th>来源<\/th>[\s\S]*<th>坐标<\/th>[\s\S]*<th>操作<\/th>/.test(source) &&
+    !/客群成员[\s\S]*<th>成员 ID<\/th>[\s\S]*<\/table>/.test(source) &&
+    /{{ member\.email \|\| "待补充" }}/.test(source) &&
+    /{{ member\.emailQuality \|\| 'PENDING' }}/.test(source) &&
+    /{{ member\.sourcePrimary \|\| "OSM" }}/.test(source) &&
+    /<MapPin :size="14" \/>[\s\S]*{{ member\.longitude \|\| "-" }}, {{ member\.latitude \|\| "-" }}/.test(source),
+  'customer segment member list columns must match the customer asset list display'
 )
 
 assert(
@@ -117,13 +167,42 @@ assert(
 )
 
 assert(
+  /客户数据导入/.test(source) &&
+    /API 导入/.test(source) &&
+    /JSON 导入/.test(source) &&
+    /Excel 文件导入/.test(source) &&
+    /importCustomerFile\('json'\)/.test(source) &&
+    /importCustomerFile\('excel'\)/.test(source),
+  'customer import page must split API, JSON, and Excel imports into separate tabs and actions'
+)
+
+assert(
+  /客户 JSON 示例结构/.test(source) &&
+    /"records": \[/.test(source) &&
+    /"externalId": "lead-001"/.test(source) &&
+    /至少要有 name \/ email \/ phone \/ website 之一/.test(source),
+  'customer JSON import page must show the required records array file structure and minimum identifier rule'
+)
+
+assert(
+  /通过接口导入/.test(source) &&
+    /\/api\/imports\/customers-json\/api/.test(source) &&
+    /X-Tenant-Id/.test(source) &&
+    /X-Tenant-Secret/.test(source) &&
+    /loadTenantApiSecretStatus/.test(source) &&
+    /rotateTenantApiSecret/.test(source),
+  'customer import page must expose API import endpoint instructions and tenant secret key rotation'
+)
+
+assert(
   /updateEmailQuality/.test(source) && /VERIFIED/.test(source),
   'customer asset page must expose manual email quality updates'
 )
 
 assert(
-  /\/api\/campaigns\/\$\{campaignId\}\/template\/preview/.test(source),
-  'mail campaign template editor must call the backend template preview endpoint'
+  /\/api\/campaigns\/\$\{id\}\/template\/preview/.test(source) &&
+    /campaignsApi\.previewTemplate\(/.test(source),
+  'mail campaign template editor must call the backend template preview endpoint via campaignsApi.previewTemplate'
 )
 
 assert(
@@ -159,7 +238,7 @@ assert(
     /function initialAdminNav\(\)[\s\S]*resolveNavigationFromLocation\(window\.location\.pathname, queryNav\)[\s\S]*localStorage\.getItem\(ACTIVE_NAV_STORAGE_KEY\)[\s\S]*'dashboard'/.test(source) &&
     /activeNav: initialAdminNav\(\)/.test(source) &&
     /function activateNav\(nav[^)]*\)[\s\S]*persistNavigationState\([^)]*\)[\s\S]*router\.push\(navToPath\(nav, [^)]*customerTool\)\)/.test(source) &&
-    /function normalizeActiveNavAccess\(\)/.test(source) &&
+    /function normalizeActiveNavAccess\([^)]*\)/.test(source) &&
     /function syncNavigationFromRoute\(pathname[^)]*queryNav = ''[^)]*\)[\s\S]*resolveNavigationFromLocation\(pathname, queryNav\)/.test(source) &&
     /if \(appStore\.token\) \{[\s\S]*normalizeActiveNavAccess\(\)[\s\S]*refreshAll\(\)/.test(source) &&
     /router\.replace\(navToPath\([^)]*activeNav, [^)]*customerTool\)\)/.test(source) &&
@@ -170,6 +249,13 @@ assert(
 assert(
   /router\.isReady\(\)\.then\(\(\) => \{[\s\S]*app\.mount\('#app'\)[\s\S]*\}\)/.test(source),
   'admin must wait for the initial Vue Router navigation before mounting so page refresh preserves the current path'
+)
+
+assert(
+  /watch\(\s*\(\) => route\.fullPath[\s\S]*syncNavigationFromRoute\(route\.path, queryNav\)[\s\S]*refreshAll\(\)/.test(source) &&
+    /function refreshIfCurrentRoute\(targetPath[^)]*\)[\s\S]*route\.path === targetPath[\s\S]*refreshAll\(\)/.test(source) &&
+    /v-for="child in navChildItems\(item\.key\)"[\s\S]*:to="navToPath\(child\.key\)"/.test(source),
+  'admin sidebar navigation must reload route data like a browser refresh, including re-clicking the current route'
 )
 
 assert(
@@ -201,7 +287,8 @@ assert(
     !/review: '审核通过'/.test(source) &&
     !/\/api\/campaigns\/\$\{campaignId\}\/review/.test(source) &&
     /rollback: campaignCurrentStatus\.value !== 'CONFIRMED' && index === currentIndex - 1/.test(source) &&
-    /\/api\/campaigns\/\$\{campaignStore\.selectedCampaign\.id\}\/rollback/.test(source) &&
+    /rollback\(id[^)]*body[^)]*\)[\s\S]*\/api\/campaigns\/\$\{id\}\/rollback/.test(source) &&
+    /campaignsApi\.rollback\(campaignStore\.selectedCampaign\.id/.test(source) &&
     /isCampaignStepDisabled\(step\)/.test(source) &&
     /推送完成后状态不可修改/.test(source) &&
     /只能回退到上一步或确认进入下一步/.test(source),
@@ -224,18 +311,18 @@ assert(
 
 assert(
     /function isCampaignAdvanceDisabled\(\)[\s\S]*if \(campaignStore\.selectedCampaign\?\.id\) return false[\s\S]*campaignNextAction\.value !== 'saveDraft'/.test(source) &&
-    /async function saveCampaignDraftForAdvance\(\)[\s\S]*\/api\/campaigns'[\s\S]*\/template`[\s\S]*fillCampaignForm\(campaign\)/.test(source) &&
-    !/async function saveCampaignDraftForAdvance\(\)[\s\S]*请先选择推送通道[\s\S]*\/template`/.test(source) &&
-    !/async function saveCampaignDraftForAdvance\(\)[\s\S]*\/tracking-link`[\s\S]*\/channel`[\s\S]*\/segments`/.test(source) &&
+    /async function saveCampaignDraftForAdvance\([^)]*\)[^{]*\{[\s\S]*campaignsApi\.create\([\s\S]*campaignsApi\.updateTemplate\([\s\S]*fillCampaignForm\(campaign\)/.test(source) &&
+    !/async function saveCampaignDraftForAdvance\([^)]*\)[^{]*\{[\s\S]*campaignsApi\.(updateChannel|updateSegments|updateTrackingLink)\([\s\S]*return campaign/.test(source) &&
     /advanceCampaignStep\([^)]*\)[\s\S]*campaignNextAction\.value !== 'saveDraft'[\s\S]*const campaign = await saveCampaignDraftForAdvance\(\)/.test(source) &&
     !/advanceCampaignStep\([^)]*\)[\s\S]*\/advance`/.test(source),
   'mail campaign lifecycle advance must keep the draft-step button clickable, persist the draft template first, and never call the generic advance endpoint'
 )
 
 assert(
-  /function runCampaignAction\([^)]*\)[\s\S]*\/simulate-send`/.test(source) &&
-    /function runCampaignAction\([^)]*\)[\s\S]*\/pre-push`/.test(source) &&
-    /function runCampaignAction\([^)]*\)[\s\S]*\/confirm`/.test(source) &&
+  /function runCampaignAction\([^)]*\)[\s\S]*campaignsApi\.action\(/.test(source) &&
+    /'simulate-send'/.test(source) &&
+    /'pre-push'/.test(source) &&
+    /'confirm'/.test(source) &&
     /advanceCampaignStep\([^)]*\)[\s\S]*runCampaignAction\(campaignNextAction\.value, options\)/.test(source),
   'mail campaign lifecycle confirmation must call independent business endpoints for simulation, pre-push generation, and final push'
 )
@@ -257,7 +344,8 @@ assert(
 )
 
 assert(
-  /\/api\/campaigns\/\$\{campaignId\}\/tracking-link/.test(source) &&
+  /\/api\/campaigns\/\$\{id\}\/tracking-link/.test(source) &&
+    /campaignsApi\.updateTrackingLink\(/.test(source) &&
     /trackingTargetUrl/.test(source) &&
     /trackingShortCode/.test(source) &&
     /trackingUtmCampaign/.test(source),

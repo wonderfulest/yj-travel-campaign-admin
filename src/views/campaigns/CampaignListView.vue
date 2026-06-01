@@ -81,18 +81,32 @@
         </section>
 </template>
 <script setup lang="ts">
+import { onMounted, proxyRefs } from 'vue'
+import { storeToRefs } from 'pinia'
 import { Layers, Pencil, Plus, RefreshCw } from 'lucide-vue-next'
-import * as admin from '../../state/index'
-
-const {
-  state,
-  canAccessNav,
-  PAGE_SIZE_OPTIONS: pageSizeOptions,
-  loadCampaigns,
-  startNewCampaign,
-  openCampaignDetail,
+import { canAccessNav as canAccessAppNav, useAppStore } from '../../state/useAppStore'
+import {
+  changeCampaignPage,
   changeCampaignPageSize,
   jumpCampaignPage,
-  changeCampaignPage
-} = admin
+  loadCampaigns,
+  useCampaignStore
+} from '../../state/useCampaignStore'
+import { openCampaignDetail, startNewCampaign } from '../../state/useUiStore'
+import { PAGE_SIZE_OPTIONS as pageSizeOptions } from '../../utils/pagination'
+
+const appStore = useAppStore()
+const campaignStore = useCampaignStore()
+const state = proxyRefs({
+  ...storeToRefs(appStore),
+  ...storeToRefs(campaignStore)
+})
+
+function canAccessNav(nav: string): boolean {
+  return canAccessAppNav(nav, appStore)
+}
+
+onMounted(() => {
+  void loadCampaigns()
+})
 </script>

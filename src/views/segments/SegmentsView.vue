@@ -77,20 +77,59 @@
         <table>
           <thead>
             <tr>
-              <th>成员 ID</th>
-              <th>客户</th>
+              <th>旅行社</th>
               <th>邮箱</th>
               <th>地区</th>
               <th>状态</th>
+              <th>来源</th>
+              <th>坐标</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="member in state.segmentMembers" :key="member.memberId">
-              <td>{{ member.memberId }}</td>
-              <td>{{ member.customerName || member.customerId }}</td>
-              <td>{{ member.email || '-' }}</td>
+              <td>
+                <strong>{{ member.customerName || member.name || member.customerId || '未命名客户' }}</strong>
+                <a
+                  v-if="member.website"
+                  class="customer-website"
+                  :href="normalizedWebsiteUrl(member.website)"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  :title="member.website"
+                >
+                  {{ formatWebsiteLabel(member.website) }}
+                </a>
+                <span v-else>{{ member.phone || '-' }}</span>
+              </td>
+              <td>{{ member.email || "待补充" }}</td>
               <td>{{ member.country || '-' }} / {{ member.city || '-' }}</td>
-              <td><span class="status">{{ member.contactStatus }}</span></td>
+              <td><span class="status">{{ member.emailQuality || 'PENDING' }}</span></td>
+              <td>{{ member.sourcePrimary || "OSM" }}</td>
+              <td class="coord">
+                <MapPin :size="14" />
+                {{ member.longitude || "-" }}, {{ member.latitude || "-" }}
+              </td>
+              <td>
+                <button
+                  class="row-action"
+                  type="button"
+                  :disabled="!segmentMemberCustomer(member).id"
+                  @click="openCustomerDetail(segmentMemberCustomer(member))"
+                >
+                  <Eye :size="14" />
+                  详情
+                </button>
+                <button
+                  class="row-action"
+                  type="button"
+                  :disabled="!segmentMemberCustomer(member).id"
+                  @click="openCustomerEdit(segmentMemberCustomer(member))"
+                >
+                  <Pencil :size="14" />
+                  编辑
+                </button>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -180,23 +219,36 @@
         </form>
       </section>
     </div>
+
+    <CustomerAssetDialog @saved="loadSegmentMembers()" />
   </section>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { RefreshCw } from 'lucide-vue-next'
-import * as admin from '../../state/index'
-import type { Segment } from '../../types'
+import { onMounted, ref } from 'vue'
+import { Eye, MapPin, Pencil, RefreshCw } from 'lucide-vue-next'
+import { useAdminState } from '../../state/adminState'
+import * as app from '../../state/useAppStore'
+import * as customer from '../../state/useCustomerStore'
+import * as channel from '../../state/useChannelStore'
+import * as segment from '../../state/useSegmentStore'
+import * as campaign from '../../state/useCampaignStore'
+import * as tracking from '../../state/useTrackingStore'
+import * as ui from '../../state/useUiStore'
+
+const state = useAdminState()
+const admin = { state, ...app, ...customer, ...channel, ...segment, ...campaign, ...tracking, ...ui }
+import type { Customer, CustomerSegmentMember, Segment } from '../../types'
 import CountryMultiSelect from '../../components/common/CountryMultiSelect.vue'
+import CustomerAssetDialog from '../../components/customers/CustomerAssetDialog.vue'
 
 const {
-  state,
   canAccessNav,
   PAGE_SIZE_OPTIONS: pageSizeOptions,
   resetSegmentForm,
   fillSegmentForm,
   refreshSegment,
+  loadSegmentMembers,
   changeSegmentPageSize,
   jumpSegmentPage,
   changeSegmentPage,
@@ -205,14 +257,23 @@ const {
   changeSegmentMemberPage,
   saveSegment,
   deleteSegment,
+  openCustomerDetail,
+  openCustomerEdit,
+  normalizedWebsiteUrl,
+  formatWebsiteLabel,
   RULE_FIELDS: ruleFields,
   RULE_OPS: ruleOps,
   ruleOpHasValue,
   ruleOpIsMulti,
   addRule,
   removeRule,
-  buildRules
+  buildRules,
+  loadSegments
 } = admin
+
+onMounted(() => {
+  void loadSegments()
+})
 
 const segmentEditorOpen = ref(false)
 
@@ -241,5 +302,20 @@ async function confirmDeleteSegment(segment: Segment) {
   const confirmed = window.confirm(`确认删除客群「${segment.name}」吗？此操作会同时清理成员关系。`)
   if (!confirmed) return
   await deleteSegment(segment.id)
+}
+
+function segmentMemberCustomer(member: CustomerSegmentMember): Customer {
+  return {
+    id: String(member.customerId || member.id || ''),
+    name: member.customerName || member.name || '',
+    country: member.country || '',
+    city: member.city || '',
+    email: member.email || '',
+    website: member.website || '',
+    phone: member.phone || '',
+    emailQuality: member.emailQuality || 'PENDING',
+    contactStatus: member.contactStatus || 'NOT_CONTACTED',
+    sourcePrimary: member.sourcePrimary || ''
+  }
 }
 </script>

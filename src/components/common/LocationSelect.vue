@@ -82,7 +82,13 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import * as admin from '../../state/index'
+import { storeToRefs } from 'pinia'
+import {
+  getCitiesByCountryId,
+  loadDictionaryCities,
+  loadDictionaryCountries,
+  useCustomerStore
+} from '../../state/useCustomerStore'
 
 interface LocationValue {
   country: string
@@ -125,8 +131,11 @@ const emit = defineEmits<{
   'update:modelValue': [value: LocationValue]
 }>()
 
-const loading = computed(() => admin.state.dictionary.loading)
-const countries = computed(() => admin.state.dictionary.countries)
+const customerStore = useCustomerStore()
+const { dictionary } = storeToRefs(customerStore)
+
+const loading = computed(() => dictionary.value.loading)
+const countries = computed(() => dictionary.value.countries)
 const countryComboRef = ref<HTMLElement | null>(null)
 const cityComboRef = ref<HTMLElement | null>(null)
 const countryQuery = ref('')
@@ -139,7 +148,7 @@ const cityMenuIndex = ref(0)
 const selectedCountry = computed(() => countries.value.find((country) => country.id === props.modelValue.country) || null)
 const selectedCities = computed(() => {
   if (!props.modelValue.country) return []
-  return admin.getCitiesByCountryId(props.modelValue.country)
+  return getCitiesByCountryId(props.modelValue.country)
 })
 const selectedCity = computed(() => selectedCities.value.find((city) => city.id === props.modelValue.city) || null)
 
@@ -159,7 +168,7 @@ const filteredCities = computed(() => {
 })
 
 onMounted(() => {
-  admin.loadDictionaryCountries()
+  loadDictionaryCountries()
   syncCountryQuery()
   syncCityQuery()
   document.addEventListener('click', handleDocumentClick, true)
@@ -173,7 +182,7 @@ watch(
   () => props.modelValue.country,
   (newCountry, oldCountry) => {
     if (newCountry && newCountry !== oldCountry) {
-      admin.loadDictionaryCities(newCountry)
+      loadDictionaryCities(newCountry)
     }
     cityOpen.value = false
   },

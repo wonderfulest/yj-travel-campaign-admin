@@ -207,10 +207,19 @@
 </template>
 <script setup lang="ts">
 import { CheckCircle2, ChevronDown, Code2, ExternalLink, Eye, Layers, Plus, Send, Trash2, X } from 'lucide-vue-next'
-import * as admin from '../../state/index'
+import { useAdminState } from '../../state/adminState'
+import * as app from '../../state/useAppStore'
+import * as customer from '../../state/useCustomerStore'
+import * as channel from '../../state/useChannelStore'
+import * as segment from '../../state/useSegmentStore'
+import * as campaign from '../../state/useCampaignStore'
+import * as tracking from '../../state/useTrackingStore'
+import * as ui from '../../state/useUiStore'
+
+const state = useAdminState()
+const admin = { state, ...app, ...customer, ...channel, ...segment, ...campaign, ...tracking, ...ui }
 
 const {
-  state,
   canAccessNav,
   EMPTY_TEMPLATE_PREVIEW_HTML: emptyTemplatePreviewHtml,
   REQUIRED_TRACKING_LINK_MESSAGE: requiredTrackingLinkMessage,

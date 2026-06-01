@@ -152,184 +152,43 @@
       </div>
     </article>
 
-    <div
-      v-if="
-        state.selectedCustomer ||
-        state.customerCreateMode ||
-        state.customerEditMode
-      "
-      class="modal-backdrop"
-      @click.self="closeCustomerDialog"
-    >
-      <section
-        class="modal-panel customer-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="customer-modal-title"
-      >
-        <div class="modal-header">
-          <div>
-            <h3 id="customer-modal-title">
-              {{
-                state.customerCreateMode
-                  ? "手动录入客户"
-                  : "客户信息"
-              }}
-            </h3>
-            <p>
-              {{
-                state.customerCreateMode
-                  ? "新增客户资产时会尽量补齐基础信息并直接写入主表"
-                  : "直接编辑客户主表字段，保存后会同步更新客户资产"
-              }}
-            </p>
-          </div>
-          <div class="modal-header-actions">
-            <button
-              class="icon-action"
-              type="button"
-              title="关闭"
-              @click="closeCustomerDialog"
-            >
-              <X :size="16" />
-            </button>
-          </div>
-        </div>
-        <form
-          class="ops-form customer-edit-form customer-modal-form"
-          @submit.prevent="saveCustomerEdit"
-        >
-          <div class="customer-modal-summary" v-if="state.selectedCustomer">
-            <div>
-              <span>客户信息</span>
-              <h4>{{ profileAsset().name || "未命名客户" }}</h4>
-            </div>
-            <div class="detail-summary">
-              <span class="status neutral">{{
-                profileAsset().contactStatus || "NOT_CONTACTED"
-              }}</span>
-              <span class="status">{{
-                profileAsset().emailQuality || "PENDING"
-              }}</span>
-              <label
-                v-if="!state.customerCreateMode && !state.customerEditMode"
-                class="detail-quality-label"
-              >
-                邮箱状态
-                <select
-                  class="email-quality-select"
-                  :value="profileAsset().emailQuality || 'PENDING'"
-                  :disabled="state.loading"
-                  @change="
-                    updateEmailQuality(profileAsset(), $event.target.value)
-                  "
-                >
-                  <option v-for="q in emailQualityOptions" :key="q" :value="q">
-                    {{ q }}
-                  </option>
-                </select>
-              </label>
-            </div>
-          </div>
-
-          <div class="customer-edit-grid">
-            <label>名称 <input v-model="state.customerEditForm.name" required /></label>
-            <label>
-              客户状态
-              <select v-model="state.customerEditForm.contactStatus">
-                <option value="NOT_CONTACTED">NOT_CONTACTED</option>
-                <option value="READY_TO_VERIFY">READY_TO_VERIFY</option>
-                <option value="VERIFIED">VERIFIED</option>
-                <option value="UNSUBSCRIBED">UNSUBSCRIBED</option>
-                <option value="BOUNCED">BOUNCED</option>
-                <option value="INVALID">INVALID</option>
-              </select>
-            </label>
-            <label>邮箱 <input v-model="state.customerEditForm.email" type="email" /></label>
-            <label>
-              邮箱状态
-              <select v-model="state.customerEditForm.emailQuality">
-                <option v-for="q in emailQualityOptions" :key="q" :value="q">
-                  {{ q }}
-                </option>
-              </select>
-            </label>
-            <label>电话 <input v-model="state.customerEditForm.phone" /></label>
-            <label>官网 <input v-model="state.customerEditForm.website" /></label>
-            <LocationSelect
-              v-model="locationValue"
-              :disabled="state.loading"
-            />
-            <label>邮编 <input v-model="state.customerEditForm.postcode" /></label>
-            <label>街道 <input v-model="state.customerEditForm.street" /></label>
-            <label>门牌号 <input v-model="state.customerEditForm.houseNumber" /></label>
-            <label class="span-2">
-              业务范围
-              <textarea
-                v-model="state.customerEditForm.businessScope"
-                rows="4"
-              ></textarea>
-            </label>
-          </div>
-
-          <div class="modal-actions customer-edit-actions">
-            <button
-              class="secondary-action"
-              type="button"
-              :disabled="state.loading"
-              @click="closeCustomerDialog"
-            >
-              取消
-            </button>
-            <button class="primary-action" type="submit" :disabled="state.loading">
-              {{ state.customerCreateMode ? "创建客户" : "保存客户" }}
-            </button>
-          </div>
-        </form>
-      </section>
-    </div>
+    <CustomerAssetDialog />
   </section>
 </template>
 <script setup lang="ts">
+import { onMounted, proxyRefs } from 'vue'
+import { storeToRefs } from 'pinia'
 import {
   Eye,
   MapPin,
   Pencil,
   Plus,
   Search,
-  X,
 } from "lucide-vue-next";
-import * as admin from "../../state/index";
-import LocationSelect from "../../components/common/LocationSelect.vue";
-import { computed } from "vue";
-
-const locationValue = computed({
-  get: () => ({
-    country: state.customerEditForm.country || "",
-    city: state.customerEditForm.city || "",
-  }),
-  set: (val) => {
-    state.customerEditForm.country = val.country;
-    state.customerEditForm.city = val.city;
-  },
-});
-
-const {
-  state,
-  filteredCustomers,
-  PAGE_SIZE_OPTIONS: pageSizeOptions,
-  changeCustomerPageSize,
-  jumpCustomerPage,
+import { useAppStore } from '../../state/useAppStore'
+import {
   changeCustomerPage,
-  normalizedWebsiteUrl,
-  formatWebsiteLabel,
-  openCustomerDetail,
+  changeCustomerPageSize,
+  filteredCustomers,
+  jumpCustomerPage,
+  loadCustomers,
   openCustomerCreate,
+  openCustomerDetail,
   openCustomerEdit,
-  closeCustomerDialog,
-  profileAsset,
-  EMAIL_QUALITY_OPTIONS: emailQualityOptions,
-  updateEmailQuality,
-  saveCustomerEdit,
-} = admin
+  useCustomerStore
+} from '../../state/useCustomerStore'
+import { formatWebsiteLabel, normalizedWebsiteUrl } from '../../utils/format'
+import { PAGE_SIZE_OPTIONS as pageSizeOptions } from '../../utils/pagination'
+import CustomerAssetDialog from "../../components/customers/CustomerAssetDialog.vue";
+
+const appStore = useAppStore()
+const customerStore = useCustomerStore()
+const state = proxyRefs({
+  ...storeToRefs(appStore),
+  ...storeToRefs(customerStore)
+})
+
+onMounted(() => {
+  void loadCustomers()
+})
 </script>

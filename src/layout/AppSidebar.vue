@@ -11,11 +11,11 @@
       <button
         class="sidebar-toggle"
         type="button"
-        :aria-label="state.sidebarCollapsed ? '展开菜单栏' : '收起菜单栏'"
-        :title="state.sidebarCollapsed ? '展开菜单栏' : '收起菜单栏'"
+        :aria-label="sidebarCollapsed ? '展开菜单栏' : '收起菜单栏'"
+        :title="sidebarCollapsed ? '展开菜单栏' : '收起菜单栏'"
         @click="toggleSidebar"
       >
-        <PanelLeftOpen v-if="state.sidebarCollapsed" :size="18" />
+        <PanelLeftOpen v-if="sidebarCollapsed" :size="18" />
         <PanelLeftClose v-else :size="18" />
       </button>
     </div>
@@ -25,7 +25,8 @@
           class="sidebar-link"
           :class="{active: isActive(item.key), 'child-active': route.path.startsWith('/campaigns') && item.key === 'campaign-list' && route.path !== '/campaign-list'}"
           :to="navToPath(item.key)"
-          :title="state.sidebarCollapsed ? item.label : ''"
+          :title="sidebarCollapsed ? item.label : ''"
+          @click="refreshIfCurrentRoute(navToPath(item.key))"
         >
           <component :is="item.icon" :size="18" />{{ item.label }}
         </RouterLink>
@@ -35,9 +36,10 @@
             :key="child.key"
             class="sidebar-link sub-nav-button"
             :class="{active: isActive(child.key)}"
-            :to="navToPath(item.key, child.key)"
-            :title="state.sidebarCollapsed ? child.label : ''"
-          >
+            :to="navToPath(child.key)"
+            :title="sidebarCollapsed ? child.label : ''"
+            @click="refreshIfCurrentRoute(navToPath(child.key))"
+            >
             <span>{{ child.label }}</span>
           </RouterLink>
         </div>
@@ -46,21 +48,37 @@
   </aside>
 </template>
 <script setup lang="ts">
+import { computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
+import { storeToRefs } from 'pinia'
 import { Mail, PanelLeftClose, PanelLeftOpen } from 'lucide-vue-next'
 import { navToPath } from '../navigation'
-import * as admin from '../state/index'
+import { useAppStore } from '../state/useAppStore'
+import { refreshAll } from '../state/refresh'
+
+const appStore = useAppStore()
+const { sidebarCollapsed } = storeToRefs(appStore)
 
 const route = useRoute()
 
-const {
-  state,
-  availablePrimaryNavItems,
-  navChildItems,
-  toggleSidebar
-} = admin
+const availablePrimaryNavItems = computed(() => appStore.availablePrimaryNavItems)
+
+function navChildItems(parentKey: string) {
+  return appStore.navChildItems(parentKey)
+}
+
+function toggleSidebar(): void {
+  appStore.toggleSidebar()
+}
 
 function isActive(key: string): boolean {
   return route.path === navToPath(key) || route.path.startsWith(`/${key}/`)
 }
+
+function refreshIfCurrentRoute(targetPath: string): void {
+  if (route.path === targetPath) {
+    void refreshAll()
+  }
+}
+
 </script>

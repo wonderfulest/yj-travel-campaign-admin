@@ -1,8 +1,10 @@
 import { computed, nextTick } from 'vue'
 import { defineStore } from 'pinia'
+import { pinia } from './pinia.ts'
 import type { Campaign, CampaignForm, CampaignStatus, Segment, TestEmail } from '../types.ts'
-import { request, appStore } from './appContext.ts'
-import { normalizePageResult, emptyPageResult, pageQuery, boundedPage } from './useCustomerStore.ts'
+import { campaignsApi, type CampaignActionKey } from '../api/campaigns.ts'
+import { appStore } from './useAppStore.ts'
+import { boundedPage, emptyPageResult, normalizePageResult, pageQuery } from '../utils/pagination.ts'
 import { segmentStore } from './useSegmentStore.ts'
 import {
   cloneTemplateVariables,
@@ -80,7 +82,7 @@ export const useCampaignStore = defineStore('campaign', {
   })
 })
 
-export const campaignStore = useCampaignStore()
+export const campaignStore = useCampaignStore(pinia)
 
 export function defaultCampaignForm(): CampaignForm {
   return {
@@ -471,7 +473,7 @@ export function toggleTestEmail(email: string): void {
 
 export async function loadTestEmails(): Promise<void> {
   try {
-    campaignStore.testEmails = await request('/api/campaigns/test-emails') as TestEmail[]
+    campaignStore.testEmails = await campaignsApi.listTestEmails()
   } catch (error: unknown) {
     const err = error as { message?: string }
     campaignStore.testEmails = []
@@ -502,10 +504,7 @@ export async function addTestEmail(): Promise<void> {
   appStore.loading = true
   appStore.error = ''
   try {
-    await request('/api/campaigns/test-emails', {
-      method: 'POST',
-      body: JSON.stringify({ email })
-    })
+    await campaignsApi.addTestEmail(email)
     await loadTestEmails()
     if (!isTestEmailSelected(email)) {
       campaignStore.selectedTestEmails = [...campaignStore.selectedTestEmails, email]
@@ -524,7 +523,7 @@ export async function deleteTestEmail(testEmail: TestEmail): Promise<void> {
   appStore.loading = true
   appStore.error = ''
   try {
-    await request(`/api/campaigns/test-emails/${testEmail.id}`, { method: 'DELETE' })
+    await campaignsApi.deleteTestEmail(testEmail.id)
     campaignStore.selectedTestEmails = campaignStore.selectedTestEmails.filter((email) => email !== normalizeEmailInput(testEmail.email))
     await loadTestEmails()
   } catch (error: unknown) {
@@ -537,7 +536,7 @@ export async function deleteTestEmail(testEmail: TestEmail): Promise<void> {
 
 export async function loadCampaigns(page = campaignStore.campaignPage.page): Promise<void> {
   try {
-    const result = await request(`/api/campaigns?${pageQuery(campaignStore.campaignPage, page)}`)
+    const result = await campaignsApi.list(pageQuery(campaignStore.campaignPage, page))
     const pageResult = normalizePageResult<Campaign>(result, [], page, campaignStore.campaignPage.size)
     campaignStore.campaigns = pageResult.items
     campaignStore.campaignPage = pageResult
@@ -567,10 +566,7 @@ async function createCampaign(): Promise<void> {
   appStore.error = ''
   appStore.notice = ''
   try {
-    const campaign = await request('/api/campaigns', {
-      method: 'POST',
-      body: JSON.stringify({ name: campaignStore.campaignForm.name, objective: campaignStore.campaignForm.objective })
-    }) as Campaign
+    const campaign = await campaignsApi.create({ name: campaignStore.campaignForm.name, objective: campaignStore.campaignForm.objective })
     campaignStore.selectedCampaign = campaign
     fillCampaignForm(campaign)
     await loadCampaigns()
@@ -594,21 +590,12 @@ export async function saveCampaignSetup(): Promise<void> {
   appStore.error = ''
   appStore.notice = ''
   try {
-    let campaign = await request(`/api/campaigns/${campaignId}/template`, {
-      method: 'PUT',
-      body: JSON.stringify(campaignTemplatePayload())
-    }) as Campaign
+    let campaign = await campaignsApi.updateTemplate(campaignId, campaignTemplatePayload())
     if (campaignStore.campaignForm.channelId) {
-      campaign = await request(`/api/campaigns/${campaignId}/channel`, {
-        method: 'PUT',
-        body: JSON.stringify({ channelId: campaignStore.campaignForm.channelId })
-      }) as Campaign
+      campaign = await campaignsApi.updateChannel(campaignId, campaignStore.campaignForm.channelId)
     }
     if (campaignStore.campaignForm.segmentIds.length) {
-      campaign = await request(`/api/campaigns/${campaignId}/segments`, {
-        method: 'PUT',
-        body: JSON.stringify({ segmentIds: campaignStore.campaignForm.segmentIds })
-      }) as Campaign
+      campaign = await campaignsApi.updateSegments(campaignId, campaignStore.campaignForm.segmentIds)
     }
     fillCampaignForm(campaign)
     await loadCampaigns()
@@ -625,17 +612,11 @@ async function saveCampaignDraftForAdvance(): Promise<Campaign | null> {
   if (!validateCampaignTemplateTrackingLink()) return null
   let campaign = campaignStore.selectedCampaign
   if (!campaign?.id) {
-    campaign = await request('/api/campaigns', {
-      method: 'POST',
-      body: JSON.stringify({ name: campaignStore.campaignForm.name, objective: campaignStore.campaignForm.objective })
-    }) as Campaign
+    campaign = await campaignsApi.create({ name: campaignStore.campaignForm.name, objective: campaignStore.campaignForm.objective })
     campaignStore.selectedCampaign = campaign
   }
   const campaignId = campaign.id
-  campaign = await request(`/api/campaigns/${campaignId}/template`, {
-    method: 'PUT',
-    body: JSON.stringify(campaignTemplatePayload())
-  }) as Campaign
+  campaign = await campaignsApi.updateTemplate(campaignId, campaignTemplatePayload())
   fillCampaignForm(campaign)
   await loadCampaigns()
   return campaign
@@ -651,10 +632,7 @@ export async function saveCampaignTrackingLink(): Promise<void> {
   appStore.error = ''
   appStore.notice = ''
   try {
-    const campaign = await request(`/api/campaigns/${campaignId}/tracking-link`, {
-      method: 'PUT',
-      body: JSON.stringify(campaignTrackingLinkPayload())
-    }) as Campaign
+    const campaign = await campaignsApi.updateTrackingLink(campaignId, campaignTrackingLinkPayload())
     fillCampaignForm(campaign)
     await loadCampaigns()
     campaignStore.trackingLinkDialogOpen = false
@@ -677,10 +655,7 @@ export async function previewCampaignTemplate(): Promise<void> {
   campaignStore.templatePreviewLoading = true
   campaignStore.templatePreviewError = ''
   try {
-    const result = await request(`/api/campaigns/${campaignId}/template/preview`, {
-      method: 'POST',
-      body: JSON.stringify(campaignTemplatePayload())
-    }) as { subjectPreview?: string; htmlPreview?: string }
+    const result = await campaignsApi.previewTemplate(campaignId, campaignTemplatePayload())
     campaignStore.templatePreviewSubject = result.subjectPreview || ''
     campaignStore.templatePreviewHtml = result.htmlPreview || ''
   } catch (error: unknown) {
@@ -736,16 +711,8 @@ export async function runCampaignAction(action: string, options: CampaignActionO
   appStore.notice = ''
   try {
     const campaignId = campaignStore.selectedCampaign.id
-    const requestOptions = {
-      method: 'POST',
-      body: JSON.stringify(action === 'simulateSend' ? { testEmails: campaignStore.selectedTestEmails } : {})
-    }
-    const pathMap: Record<string, string> = {
-      prePush: `/api/campaigns/${campaignId}/pre-push`,
-      confirm: `/api/campaigns/${campaignId}/confirm`,
-      simulateSend: `/api/campaigns/${campaignId}/simulate-send`
-    }
-    const campaign = await request(pathMap[action], requestOptions) as Campaign
+    const body = action === 'simulateSend' ? { testEmails: campaignStore.selectedTestEmails } : {}
+    const campaign = await campaignsApi.action(campaignId, action as CampaignActionKey, body)
     fillCampaignForm(campaign)
     await loadCampaigns()
     if (action === 'simulateSend') {
@@ -826,13 +793,10 @@ export async function rollbackCampaignStep(step: CampaignStep | null | undefined
   appStore.error = ''
   appStore.notice = ''
   try {
-    const campaign = await request(`/api/campaigns/${campaignStore.selectedCampaign.id}/rollback`, {
-      method: 'POST',
-      body: JSON.stringify({
-        expectedStatus: campaignCurrentStatus.value,
-        targetStatus: step.status
-      })
-    }) as Campaign
+    const campaign = await campaignsApi.rollback(campaignStore.selectedCampaign.id, {
+      expectedStatus: campaignCurrentStatus.value,
+      targetStatus: step.status
+    })
     fillCampaignForm(campaign)
     await loadCampaigns()
     appStore.notice = `已回退到上一步：${campaignCurrentStatusLabel.value}`

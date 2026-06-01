@@ -1,7 +1,8 @@
 import { computed } from 'vue'
 import { defineStore } from 'pinia'
+import { pinia } from './pinia.ts'
 import type {
-  Customer,
+  CustomerSegmentMember,
   Segment,
   SegmentForm,
   SegmentRefreshResult,
@@ -9,8 +10,9 @@ import type {
   SegmentRuleCondition,
   SegmentSummary
 } from '../types.ts'
-import { request, appStore } from './appContext.ts'
-import { normalizePageResult, emptyPageResult, pageQuery, boundedPage } from './useCustomerStore.ts'
+import { segmentsApi } from '../api/segments.ts'
+import { appStore } from './useAppStore.ts'
+import { boundedPage, emptyPageResult, normalizePageResult, pageQuery } from '../utils/pagination.ts'
 
 export const useSegmentStore = defineStore('segment', {
   state: () => ({
@@ -24,7 +26,7 @@ export const useSegmentStore = defineStore('segment', {
       hasNext: false,
       hasPrevious: false
     },
-    segmentMembers: [] as Customer[],
+    segmentMembers: [] as CustomerSegmentMember[],
     segmentMemberPage: {
       page: 0,
       size: 20,
@@ -44,7 +46,7 @@ export const useSegmentStore = defineStore('segment', {
   })
 })
 
-export const segmentStore = useSegmentStore()
+export const segmentStore = useSegmentStore(pinia)
 
 export const segmentReadinessStats = computed(() => segmentStore.segmentSummary || summarizeSegments(segmentStore.segments))
 
@@ -77,7 +79,7 @@ export function summarizeSegments(segments: Segment[]): SegmentSummary {
 
 export async function loadSegmentSummary(): Promise<void> {
   try {
-    segmentStore.segmentSummary = await request('/api/segments/summary')
+    segmentStore.segmentSummary = await segmentsApi.summary() as SegmentSummary
   } catch (error) {
     segmentStore.segmentSummary = null
     appStore.error = `客群统计加载失败：${error.message}`
@@ -86,7 +88,7 @@ export async function loadSegmentSummary(): Promise<void> {
 
 export async function loadSegments(page = segmentStore.segmentPage.page): Promise<void> {
   try {
-    const result = await request(`/api/segments?${pageQuery(segmentStore.segmentPage, page)}`)
+    const result = await segmentsApi.list(pageQuery(segmentStore.segmentPage, page))
     const pageResult = normalizePageResult<Segment>(result, [], page, segmentStore.segmentPage.size)
     segmentStore.segments = pageResult.items
     segmentStore.segmentPage = pageResult
@@ -104,14 +106,14 @@ export async function loadSegments(page = segmentStore.segmentPage.page): Promis
 export async function loadSegmentMembers(segmentId = segmentStore.selectedSegment?.id, page = segmentStore.segmentMemberPage.page): Promise<void> {
   if (!segmentId) return
   try {
-    const result = await request(`/api/segments/${segmentId}/members?${pageQuery(segmentStore.segmentMemberPage, page)}`)
-    const pageResult = normalizePageResult<Customer>(result, [], page, segmentStore.segmentMemberPage.size)
+    const result = await segmentsApi.members(segmentId, pageQuery(segmentStore.segmentMemberPage, page))
+    const pageResult = normalizePageResult<CustomerSegmentMember>(result, [], page, segmentStore.segmentMemberPage.size)
     segmentStore.segmentMembers = pageResult.items
     segmentStore.segmentMemberPage = pageResult
   } catch (error: unknown) {
     const err = error as { message?: string }
     segmentStore.segmentMembers = []
-    segmentStore.segmentMemberPage = emptyPageResult<Customer>(0, segmentStore.segmentMemberPage.size)
+    segmentStore.segmentMemberPage = emptyPageResult<CustomerSegmentMember>(0, segmentStore.segmentMemberPage.size)
     appStore.error = `客群成员加载失败：${err.message}`
   }
 }
@@ -122,10 +124,7 @@ export async function saveSegment(): Promise<void> {
   appStore.notice = ''
   try {
     const isUpdate = Boolean(segmentStore.segmentForm.id)
-    const result = await request(isUpdate ? `/api/segments/${segmentStore.segmentForm.id}` : '/api/segments', {
-      method: isUpdate ? 'PUT' : 'POST',
-      body: JSON.stringify(segmentPayload())
-    }) as Segment
+    const result = await segmentsApi.save(segmentStore.segmentForm.id, segmentPayload())
     appStore.notice = isUpdate ? '客群规则已更新' : '客群已创建'
     await loadSegments()
     fillSegmentForm(result)
@@ -146,12 +145,12 @@ export async function deleteSegment(segmentId = segmentStore.selectedSegment?.id
   appStore.error = ''
   appStore.notice = ''
   try {
-    await request(`/api/segments/${segmentId}`, { method: 'DELETE' })
+    await segmentsApi.remove(segmentId)
     appStore.notice = '客群已删除'
     const nextPage = segmentStore.segmentPage.page
     segmentStore.selectedSegment = null
     segmentStore.segmentMembers = []
-    segmentStore.segmentMemberPage = emptyPageResult<Customer>(0, segmentStore.segmentMemberPage.size)
+    segmentStore.segmentMemberPage = emptyPageResult<CustomerSegmentMember>(0, segmentStore.segmentMemberPage.size)
     segmentStore.segmentRefreshResult = null
     await loadSegments(nextPage)
     if (segmentStore.segmentPage.totalPages > 0 && segmentStore.segmentPage.page >= segmentStore.segmentPage.totalPages) {
@@ -174,7 +173,7 @@ export async function refreshSegment(segmentId = segmentStore.selectedSegment?.i
   appStore.error = ''
   appStore.notice = ''
   try {
-    segmentStore.segmentRefreshResult = await request(`/api/segments/${segmentId}/refresh`, { method: 'POST', body: JSON.stringify({}) }) as SegmentRefreshResult
+    segmentStore.segmentRefreshResult = await segmentsApi.refresh(segmentId)
     await loadSegmentMembers(segmentId, 0)
     appStore.notice = `客群已刷新，命中 ${segmentStore.segmentRefreshResult.matchedCount} 个客户`
   } catch (error: unknown) {
@@ -207,7 +206,7 @@ export function fillSegmentForm(segment: Segment): void {
 export function resetSegmentForm(): void {
   segmentStore.selectedSegment = null
   segmentStore.segmentMembers = []
-  segmentStore.segmentMemberPage = emptyPageResult<Customer>(0, segmentStore.segmentMemberPage.size)
+  segmentStore.segmentMemberPage = emptyPageResult<CustomerSegmentMember>(0, segmentStore.segmentMemberPage.size)
   segmentStore.segmentForm = {
     id: '',
     name: '',

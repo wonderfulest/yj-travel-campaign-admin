@@ -120,19 +120,35 @@
         </section>
 </template>
 <script setup lang="ts">
+import { onMounted, proxyRefs } from 'vue'
+import { storeToRefs } from 'pinia'
 import { Pencil, PlugZap, Trash2 } from 'lucide-vue-next'
-import * as admin from '../../state/index'
-
-const {
-  state,
-  canAccessNav,
-  PAGE_SIZE_OPTIONS: pageSizeOptions,
-  changeChannelPageSize,
-  jumpChannelPage,
-  changeChannelPage,
-  saveChannel,
-  editChannel,
+import { canAccessNav as canAccessAppNav, useAppStore } from '../../state/useAppStore'
+import { PAGE_SIZE_OPTIONS as pageSizeOptions } from '../../utils/pagination'
+import {
   cancelChannelEdit,
-  deleteChannel
-} = admin
+  changeChannelPage,
+  changeChannelPageSize,
+  deleteChannel,
+  editChannel,
+  jumpChannelPage,
+  loadChannels,
+  saveChannel,
+  useChannelStore
+} from '../../state/useChannelStore'
+
+const appStore = useAppStore()
+const channelStore = useChannelStore()
+const state = proxyRefs({
+  ...storeToRefs(appStore),
+  ...storeToRefs(channelStore)
+})
+
+function canAccessNav(nav: string): boolean {
+  return canAccessAppNav(nav, appStore)
+}
+
+onMounted(() => {
+  void loadChannels()
+})
 </script>

@@ -10,38 +10,41 @@
           </div>
         </div>
         <div class="auth-tabs" role="tablist">
-          <button :class="{active: state.authMode === 'login'}" @click="state.authMode = 'login'">登录</button>
-          <button :class="{active: state.authMode === 'register'}" @click="state.authMode = 'register'">注册租户</button>
+          <button :class="{active: authMode === 'login'}" @click="authMode = 'login'">登录</button>
+          <button :class="{active: authMode === 'register'}" @click="authMode = 'register'">注册租户</button>
         </div>
         <form class="auth-form" @submit.prevent="login()">
-          <label v-if="state.authMode === 'register'">
+          <label v-if="authMode === 'register'">
             租户名称
-            <input v-model="state.authForm.tenantName" autocomplete="organization" />
+            <input v-model="authForm.tenantName" autocomplete="organization" />
           </label>
-          <label v-if="state.authMode === 'register'">
+          <label v-if="authMode === 'register'">
             用户名称
-            <input v-model="state.authForm.displayName" autocomplete="name" />
+            <input v-model="authForm.displayName" autocomplete="name" />
           </label>
           <label>
             登录邮箱
-            <input v-model="state.authForm.email" type="email" autocomplete="email" />
+            <input v-model="authForm.email" type="email" autocomplete="email" />
           </label>
           <label>
             密码
-            <input v-model="state.authForm.password" type="password" autocomplete="current-password" />
+            <input v-model="authForm.password" type="password" autocomplete="current-password" />
           </label>
-          <button class="primary-action" :disabled="state.loading">
+          <button class="primary-action" :disabled="loading">
             <KeyRound :size="17" />
-            {{ state.authMode === 'register' ? '注册并登录' : '登录后台' }}
+            {{ authMode === 'register' ? '注册并登录' : '登录后台' }}
           </button>
         </form>
-        <p v-if="state.error" class="message error">{{ state.error }}</p>
+        <p v-if="error" class="message error">{{ error }}</p>
       </section>
     </main>
 </template>
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
 import { KeyRound, Mail } from 'lucide-vue-next'
-import * as admin from '../../state/index'
+import { useAppStore } from '../../state/useAppStore'
 
-const { state, login } = admin
+const appStore = useAppStore()
+const { authMode, authForm, loading, error } = storeToRefs(appStore)
+const { login } = appStore
 </script>
