@@ -18,9 +18,18 @@
             <Plus :size="15" />
             手动录入
           </button>
+          <button
+            class="secondary-action compact"
+            type="button"
+            :disabled="state.loading || state.customerSearchIndexSyncing"
+            @click="syncCustomerSearchIndex"
+          >
+            <RefreshCw :size="15" :class="{ spinning: state.customerSearchIndexSyncing }" />
+            {{ state.customerSearchIndexSyncing ? "同步中" : "同步搜索索引" }}
+          </button>
           <label class="search-box">
             <Search :size="16" />
-            <input v-model="state.filter" placeholder="搜索名称、邮箱、国家" />
+            <input v-model="state.filter" placeholder="搜索名称、邮箱、国家" @input="searchCustomers" />
           </label>
         </div>
       </div>
@@ -156,13 +165,14 @@
   </section>
 </template>
 <script setup lang="ts">
-import { proxyRefs } from 'vue'
+import { proxyRefs, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import {
   Eye,
   MapPin,
   Pencil,
   Plus,
+  RefreshCw,
   Search,
 } from "lucide-vue-next";
 import { useAppStore } from '../../state/useAppStore'
@@ -175,6 +185,8 @@ import {
   openCustomerCreate,
   openCustomerDetail,
   openCustomerEdit,
+  searchCustomers,
+  syncCustomerSearchIndex,
   useCustomerStore
 } from '../../state/useCustomerStore'
 import { formatWebsiteLabel, normalizedWebsiteUrl } from '../../utils/format'
@@ -186,5 +198,9 @@ const customerStore = useCustomerStore()
 const state = proxyRefs({
   ...storeToRefs(appStore),
   ...storeToRefs(customerStore)
+})
+
+onMounted(() => {
+  void loadCustomers()
 })
 </script>

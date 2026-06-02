@@ -5,6 +5,7 @@ import type {
   Customer,
   CustomerEditForm,
   CustomerProfile,
+  CustomerSearchIndexSyncResult,
   CustomerSummary,
   EmailQuality,
   ImportResult,
@@ -23,6 +24,25 @@ export const customersApi = {
   },
   list(query: string): Promise<unknown> {
     return request(`/api/customers?${query}`)
+  },
+  search(query: string, keyword: string): Promise<unknown> {
+    const params = new URLSearchParams(query)
+    params.set('q', keyword)
+    return request(`/api/customers/search?${params.toString()}`)
+  },
+  listWithEmail(query = 'page=0&size=20'): Promise<unknown> {
+    const separator = query ? '&' : ''
+    return request(`/api/customers?${query}${separator}hasEmail=true`)
+  },
+  searchWithEmail(query = 'page=0&size=20'): Promise<unknown> {
+    const separator = query ? '&' : ''
+    return request(`/api/customers/search?${query}${separator}hasEmail=true`)
+  },
+  syncSearchIndex(): Promise<CustomerSearchIndexSyncResult> {
+    return request('/api/customers/search-index/sync', {
+      method: 'POST',
+      body: JSON.stringify({})
+    }) as Promise<CustomerSearchIndexSyncResult>
   },
   create(body: CustomerEditForm): Promise<Customer> {
     return request('/api/customers', {

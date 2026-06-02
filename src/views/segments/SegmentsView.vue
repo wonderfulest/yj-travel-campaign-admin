@@ -225,7 +225,7 @@
 </template>
 
 <script setup lang="ts">
-import { proxyRefs, ref } from 'vue'
+import { proxyRefs, ref, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { Eye, MapPin, Pencil, RefreshCw } from 'lucide-vue-next'
 import { canAccessNav as canAccessAppNav, useAppStore } from '../../state/useAppStore'
@@ -272,6 +272,10 @@ const state = proxyRefs({
 function canAccessNav(nav: string): boolean {
   return canAccessAppNav(nav, appStore)
 }
+
+onMounted(() => {
+  void loadSegments()
+})
 
 const segmentEditorOpen = ref(false)
 

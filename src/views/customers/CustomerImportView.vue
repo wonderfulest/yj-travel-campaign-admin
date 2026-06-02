@@ -167,7 +167,7 @@ X-Tenant-Secret: {{ state.tenantApiSecretKey || "yj_live_xxx" }}
 
 <script setup lang="ts">
 import { Braces, Download, FileSpreadsheet, FileUp, Plug } from 'lucide-vue-next'
-import { defineComponent, h, proxyRefs, ref } from 'vue'
+import { defineComponent, h, proxyRefs, ref, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useAppStore } from '../../state/useAppStore'
 import {
@@ -185,6 +185,10 @@ const customerStore = useCustomerStore()
 const state = proxyRefs({
   ...storeToRefs(appStore),
   ...storeToRefs(customerStore)
+})
+
+onMounted(() => {
+  void loadTenantApiSecretStatus()
 })
 
 type ImportTab = 'api' | 'json' | 'excel'

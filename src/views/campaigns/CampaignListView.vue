@@ -46,9 +46,13 @@
                     <td>{{ campaign.segmentIds?.length || 0 }} 个</td>
                     <td>{{ campaign.prePushRecords?.filter((item) => item.status === 'PENDING_REVIEW').length || 0 }}</td>
                     <td>
-                      <button class="row-action" type="button" @click="openCampaignDetail(campaign)">
+                      <button class="row-action" type="button" :disabled="state.loading" @click="openCampaignDetail(campaign)">
                         <Pencil :size="14" />
                         进入详情
+                      </button>
+                      <button class="row-action danger" type="button" :disabled="state.loading" @click="deleteCampaign(campaign)">
+                        <Trash2 :size="14" />
+                        删除
                       </button>
                     </td>
                   </tr>
@@ -81,13 +85,14 @@
         </section>
 </template>
 <script setup lang="ts">
-import { proxyRefs } from 'vue'
+import { proxyRefs, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
-import { Layers, Pencil, Plus, RefreshCw } from 'lucide-vue-next'
+import { Layers, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-vue-next'
 import { canAccessNav as canAccessAppNav, useAppStore } from '../../state/useAppStore'
 import {
   changeCampaignPage,
   changeCampaignPageSize,
+  deleteCampaign,
   jumpCampaignPage,
   loadCampaigns,
   useCampaignStore
@@ -105,4 +110,8 @@ const state = proxyRefs({
 function canAccessNav(nav: string): boolean {
   return canAccessAppNav(nav, appStore)
 }
+
+onMounted(() => {
+  void loadCampaigns()
+})
 </script>

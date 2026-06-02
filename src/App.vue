@@ -30,7 +30,6 @@ import CampaignDialogs from './views/campaigns/CampaignDialogs.vue'
 import CustomerHelpPanel from './components/common/CustomerHelpPanel.vue'
 import { useAppStore } from './state/useAppStore'
 import { useCustomerStore } from './state/useCustomerStore'
-import { refreshAll } from './state/refresh'
 
 const appStore = useAppStore()
 const customerStore = useCustomerStore()
@@ -46,7 +45,6 @@ watch(
     if (!isLoggedIn.value) return
     const queryNav = typeof route.query.nav === 'string' ? route.query.nav : ''
     appStore.syncNavigationFromRoute(route.path, queryNav)
-    void refreshAll()
   }
 )
 </script>

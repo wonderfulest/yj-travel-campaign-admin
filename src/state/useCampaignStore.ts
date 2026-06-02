@@ -1,12 +1,12 @@
 import { computed, nextTick } from 'vue'
 import { defineStore } from 'pinia'
-import type { Campaign, CampaignStatus, Segment, TestEmail } from '../types'
+import type { Campaign, CampaignForm, CampaignStatus, Customer, Segment, TemplateVariableOption } from '../types'
 import { campaignsApi, type CampaignActionKey } from '../api/campaigns'
+import { customersApi } from '../api/customers'
 import { useAppStore } from './useAppStore'
 import { boundedPage, emptyPageResult, normalizePageResult, pageQuery } from '../utils/pagination'
 import { useSegmentStore } from './useSegmentStore'
 import {
-  CAMPAIGN_ACTION_LABELS,
   CAMPAIGN_LIFECYCLE_STEPS,
   CAMPAIGN_NEXT_ACTION_BY_STATUS,
   CAMPAIGN_STATUS_LABELS,
@@ -17,7 +17,9 @@ import {
   campaignLifecycleIndex,
   defaultCampaignForm,
   normalizedIdList,
-  normalizedTemplateVariables
+  normalizedTemplateVariables,
+  trackingFinalUrl,
+  trackingShortUrl
 } from '../utils/campaignConfig'
 import {
   cloneTemplateVariables,
@@ -41,7 +43,9 @@ export {
   campaignLifecycleIndex,
   defaultCampaignForm,
   normalizedIdList,
-  normalizedTemplateVariables
+  normalizedTemplateVariables,
+  trackingFinalUrl,
+  trackingShortUrl
 } from '../utils/campaignConfig'
 
 export const useCampaignStore = defineStore('campaign', {
@@ -59,12 +63,13 @@ export const useCampaignStore = defineStore('campaign', {
     campaignForm: defaultCampaignForm(),
     trackingLinkDialogOpen: false,
     finalConfirmDialogOpen: false,
-    testEmailDialogOpen: false,
-    testEmails: [] as TestEmail[],
-    selectedTestEmails: [] as string[],
-    newTestEmail: '',
+    testCustomerDialogOpen: false,
+    testCustomers: [] as Customer[],
+    selectedTestCustomerIds: [] as string[],
+    testCustomerQuery: '',
     segmentDropdownOpen: false,
     segmentDropdownQuery: '',
+    templateVariableOptions: [] as TemplateVariableOption[],
     templatePreviewHtml: '',
     templatePreviewSubject: '',
     templatePreviewError: '',
@@ -244,11 +249,24 @@ export function syncCampaignTemplateVariables(): void {
   updateLocalTemplatePreview()
 }
 
+export async function loadTemplateVariableOptions(): Promise<void> {
+  try {
+    campaignState().templateVariableOptions = await campaignsApi.listTemplateVariables()
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    campaignState().templateVariableOptions = []
+    appState().error = `模板变量加载失败：${err.message}`
+  }
+}
+
 export function updateLocalTemplatePreview(): void {
   const preview = renderTemplatePreview({
     subject: campaignState().campaignForm.subject,
     htmlBody: campaignState().campaignForm.htmlBody,
-    variables: campaignState().campaignForm.templateVariables
+    variables: campaignState().campaignForm.templateVariables,
+    runtimeVariables: {
+      [REQUIRED_TRACKING_LINK_PARAM]: trackingShortUrl(campaignState().selectedCampaign?.trackingLink)
+    }
   })
   campaignState().templatePreviewSubject = preview.subjectPreview || ''
   campaignState().templatePreviewHtml = preview.htmlPreview || ''
@@ -292,7 +310,31 @@ export async function insertTemplateVariable(variable: { key?: string }): Promis
   editor.setSelectionRange(start + placeholder.length, start + placeholder.length)
 }
 
+export async function insertTrackingLinkVariable(): Promise<void> {
+  await insertTemplateVariable({ key: REQUIRED_TRACKING_LINK_PARAM })
+}
+
+export async function insertCampaignFormVariable(field: keyof CampaignForm, variable: { key?: string }, elementId: string): Promise<void> {
+  const key = String(variable?.key || '').trim()
+  if (!key) return
+  const placeholder = '${' + key + '}'
+  const currentValue = String(campaignState().campaignForm[field] || '')
+  const input = document.getElementById(elementId) as HTMLInputElement | null
+  if (!input) {
+    campaignState().campaignForm[field] = `${currentValue}${placeholder}`
+    return
+  }
+  const start = input.selectionStart ?? currentValue.length
+  const end = input.selectionEnd ?? currentValue.length
+  campaignState().campaignForm[field] = `${currentValue.slice(0, start)}${placeholder}${currentValue.slice(end)}`
+  await nextTick()
+  input.focus()
+  input.setSelectionRange(start + placeholder.length, start + placeholder.length)
+}
+
 export interface CampaignTemplatePayload {
+  name: string
+  objective: string
   subject: string
   fromName: string
   htmlBody: string
@@ -302,6 +344,8 @@ export interface CampaignTemplatePayload {
 export function campaignTemplatePayload(): CampaignTemplatePayload {
   syncCampaignTemplateVariables()
   return {
+    name: campaignState().campaignForm.name,
+    objective: campaignState().campaignForm.objective,
     subject: campaignState().campaignForm.subject,
     fromName: campaignState().campaignForm.fromName,
     htmlBody: campaignState().campaignForm.htmlBody,
@@ -310,11 +354,14 @@ export function campaignTemplatePayload(): CampaignTemplatePayload {
 }
 
 export function campaignHtmlHasTrackingLinkParam(): boolean {
-  return scanTemplateVariableKeys(campaignState().campaignForm.htmlBody).includes(REQUIRED_TRACKING_LINK_PARAM)
+  const html = campaignState().campaignForm.htmlBody
+  if (!html) return true
+  return scanTemplateVariableKeys(html).includes(REQUIRED_TRACKING_LINK_PARAM)
 }
 
 export function validateCampaignTemplateTrackingLink(): boolean {
-  if (campaignHtmlHasTrackingLinkParam()) return true
+  const html = campaignState().campaignForm.htmlBody
+  if (!html || campaignHtmlHasTrackingLinkParam()) return true
   campaignState().templatePreviewHtml = ''
   campaignState().templatePreviewSubject = ''
   campaignState().templatePreviewError = REQUIRED_TRACKING_LINK_MESSAGE
@@ -407,81 +454,51 @@ export function normalizeEmailInput(email: unknown): string {
   return String(email || '').trim().toLowerCase()
 }
 
-export function isTestEmailSelected(email: string): boolean {
-  return campaignState().selectedTestEmails.includes(normalizeEmailInput(email))
+export function isTestCustomerSelected(customerId: string | number): boolean {
+  return campaignState().selectedTestCustomerIds.includes(String(customerId))
 }
 
-export function toggleTestEmail(email: string): void {
-  const normalized = normalizeEmailInput(email)
-  if (!normalized) return
-  if (isTestEmailSelected(normalized)) {
-    campaignState().selectedTestEmails = campaignState().selectedTestEmails.filter((item) => item !== normalized)
+export function toggleTestCustomer(customer: Customer): void {
+  const customerId = String(customer?.id || '')
+  if (!customerId || !customer.email) return
+  if (isTestCustomerSelected(customerId)) {
+    campaignState().selectedTestCustomerIds = campaignState().selectedTestCustomerIds.filter((item) => item !== customerId)
     return
   }
-  campaignState().selectedTestEmails = [...campaignState().selectedTestEmails, normalized]
+  campaignState().selectedTestCustomerIds = [...campaignState().selectedTestCustomerIds, customerId]
 }
 
-export async function loadTestEmails(): Promise<void> {
+export async function loadTestCustomers(): Promise<void> {
   try {
-    campaignState().testEmails = await campaignsApi.listTestEmails()
+    const query = new URLSearchParams({
+      page: '0',
+      size: '20',
+      sort: 'createdAt:desc'
+    })
+    const keyword = campaignState().testCustomerQuery.trim()
+    if (keyword) query.set('q', keyword)
+    const result = await customersApi.searchWithEmail(query.toString())
+    const pageResult = normalizePageResult<Customer>(result, [], 0, 20)
+    campaignState().testCustomers = pageResult.items
   } catch (error: unknown) {
     const err = error as { message?: string }
-    campaignState().testEmails = []
-    appState().error = `测试邮箱加载失败：${err.message}`
+    campaignState().testCustomers = []
+    appState().error = `测试客户加载失败：${err.message}`
   }
 }
 
-export async function openTestEmailDialog(): Promise<void> {
+export async function openTestCustomerDialog(): Promise<void> {
   if (!campaignState().selectedCampaign?.id) {
     appState().error = '请先选择或创建活动'
     return
   }
-  campaignState().testEmailDialogOpen = true
+  campaignState().testCustomerDialogOpen = true
   appState().error = ''
-  await loadTestEmails()
+  await loadTestCustomers()
 }
 
-export function closeTestEmailDialog(): void {
-  campaignState().testEmailDialogOpen = false
-}
-
-export async function addTestEmail(): Promise<void> {
-  const email = normalizeEmailInput(campaignState().newTestEmail)
-  if (!email) {
-    appState().error = '请输入测试邮箱'
-    return
-  }
-  appState().loading = true
-  appState().error = ''
-  try {
-    await campaignsApi.addTestEmail(email)
-    await loadTestEmails()
-    if (!isTestEmailSelected(email)) {
-      campaignState().selectedTestEmails = [...campaignState().selectedTestEmails, email]
-    }
-    campaignState().newTestEmail = ''
-  } catch (error: unknown) {
-    const err = error as { message?: string }
-    appState().error = `测试邮箱保存失败：${err.message}`
-  } finally {
-    appState().loading = false
-  }
-}
-
-export async function deleteTestEmail(testEmail: TestEmail): Promise<void> {
-  if (!testEmail?.id) return
-  appState().loading = true
-  appState().error = ''
-  try {
-    await campaignsApi.deleteTestEmail(testEmail.id)
-    campaignState().selectedTestEmails = campaignState().selectedTestEmails.filter((email) => email !== normalizeEmailInput(testEmail.email))
-    await loadTestEmails()
-  } catch (error: unknown) {
-    const err = error as { message?: string }
-    appState().error = `测试邮箱删除失败：${err.message}`
-  } finally {
-    appState().loading = false
-  }
+export function closeTestCustomerDialog(): void {
+  campaignState().testCustomerDialogOpen = false
 }
 
 export async function loadCampaigns(page = campaignState().campaignPage.page): Promise<void> {
@@ -499,15 +516,35 @@ export async function loadCampaigns(page = campaignState().campaignPage.page): P
     if (!pageResult.items.length) {
       clearCampaignSelection()
     }
-    if (!campaignState().selectedCampaign && pageResult.items.length) {
-      fillCampaignForm(pageResult.items[0])
-    }
   } catch (error: unknown) {
     const err = error as { message?: string }
     campaignState().campaigns = []
     campaignState().campaignPage = emptyPageResult<Campaign>(0, campaignState().campaignPage.size)
     clearCampaignSelection()
     appState().error = `活动加载失败：${err.message}`
+  }
+}
+
+export async function loadCampaignDetail(campaignId: string | number): Promise<void> {
+  if (!campaignId) return
+  if (campaignState().selectedCampaign?.id === campaignId) return
+  appState().loading = true
+  appState().error = ''
+  try {
+    const campaign = await campaignsApi.get(campaignId)
+    fillCampaignForm(campaign)
+    const existingIndex = campaignState().campaigns.findIndex((item) => item.id === campaign.id)
+    if (existingIndex >= 0) {
+      campaignState().campaigns.splice(existingIndex, 1, campaign)
+    } else {
+      campaignState().campaigns = [campaign, ...campaignState().campaigns]
+    }
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    clearCampaignSelection()
+    appState().error = `活动详情加载失败：${err.message}`
+  } finally {
+    appState().loading = false
   }
 }
 
@@ -524,6 +561,30 @@ export async function createCampaign(): Promise<void> {
   } catch (error: unknown) {
     const err = error as { message?: string }
     appState().error = `活动创建失败：${err.message}`
+  } finally {
+    appState().loading = false
+  }
+}
+
+export async function deleteCampaign(campaign: Campaign): Promise<void> {
+  if (!campaign?.id) return
+  if (!window.confirm(`确认删除邮件活动「${campaign.name || campaign.id}」？此操作会同时清理该活动的推送记录和追踪数据。`)) return
+  appState().loading = true
+  appState().error = ''
+  appState().notice = ''
+  try {
+    await campaignsApi.remove(campaign.id)
+    if (campaignState().selectedCampaign?.id === campaign.id) {
+      clearCampaignSelection()
+    }
+    const nextPage = campaignState().campaigns.length === 1 && campaignState().campaignPage.page > 0
+      ? campaignState().campaignPage.page - 1
+      : campaignState().campaignPage.page
+    await loadCampaigns(nextPage)
+    appState().notice = '邮件活动已删除'
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    appState().error = `活动删除失败：${err.message}`
   } finally {
     appState().loading = false
   }
@@ -619,7 +680,7 @@ export async function previewCampaignTemplate(): Promise<void> {
 }
 
 interface CampaignActionOptions {
-  confirmedTestEmails?: boolean
+  confirmedTestCustomers?: boolean
   confirmedFinalPush?: boolean
 }
 
@@ -648,12 +709,12 @@ export async function runCampaignAction(action: string, options: CampaignActionO
       return
     }
   }
-  if (action === 'simulateSend' && !options.confirmedTestEmails) {
-    await openTestEmailDialog()
+  if (action === 'simulateSend' && !options.confirmedTestCustomers) {
+    await openTestCustomerDialog()
     return
   }
-  if (action === 'simulateSend' && !campaignState().selectedTestEmails.length) {
-    appState().error = '请选择或新增至少一个测试邮箱'
+  if (action === 'simulateSend' && !campaignState().selectedTestCustomerIds.length) {
+    appState().error = '请选择至少一个测试客户'
     return
   }
   appState().loading = true
@@ -661,13 +722,13 @@ export async function runCampaignAction(action: string, options: CampaignActionO
   appState().notice = ''
   try {
     const campaignId = campaignState().selectedCampaign.id
-    const body = action === 'simulateSend' ? { testEmails: campaignState().selectedTestEmails } : {}
+    const body = action === 'simulateSend' ? { customerIds: campaignState().selectedTestCustomerIds } : {}
     const campaign = await campaignsApi.action(campaignId, action as CampaignActionKey, body)
     fillCampaignForm(campaign)
     await loadCampaigns()
     if (action === 'simulateSend') {
-      closeTestEmailDialog()
-      campaignState().selectedTestEmails = []
+      closeTestCustomerDialog()
+      campaignState().selectedTestCustomerIds = []
       appState().notice = '模拟发送成功'
     } else {
       appState().notice = '活动状态已更新'
@@ -718,11 +779,11 @@ export async function advanceCampaignStep(options: CampaignActionOptions = {}): 
 }
 
 export async function confirmTestSimulation(): Promise<void> {
-  if (!campaignState().selectedTestEmails.length) {
-    appState().error = '请选择或新增至少一个测试邮箱'
+  if (!campaignState().selectedTestCustomerIds.length) {
+    appState().error = '请选择至少一个测试客户'
     return
   }
-  await advanceCampaignStep({ confirmedTestEmails: true })
+  await advanceCampaignStep({ confirmedTestCustomers: true })
 }
 
 export async function confirmFinalPush(): Promise<void> {

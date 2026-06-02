@@ -46,8 +46,12 @@ assert(
 assert(
   /extractApiErrorMessage\(response, text\)/.test(source) &&
     /JSON\.parse\(text\)/.test(source) &&
-    /parsed\.detail/.test(source),
-  'API request failures must prefer backend ProblemDetail.detail over generic HTTP or auth messages'
+    /parsed\.msg/.test(source) &&
+    /unwrapApiResponse/.test(source) &&
+    /parsed\.code !== 0/.test(source) &&
+    /return parsed\.data/.test(source) &&
+    !/parsed\.detail|parsed\.title|parsed\.message/.test(source),
+  'API request failures must use backend envelope msg and successful API calls must unwrap envelope data'
 )
 
 assert(
@@ -206,13 +210,30 @@ assert(
 )
 
 assert(
+  /function trackingFinalUrl\([^)]*trackingLink/.test(source) &&
+    /params\.set\('utm_source'/.test(source) &&
+    /base\.includes\('\?'\) \? '&' : '\?'/.test(source),
+  'campaign tracking target URL copies must build the final long URL with UTM tags before the hash fragment'
+)
+
+assert(
+  /@click="copyShortLink\(trackingFinalUrl, '目标长链接已复制'\)"/.test(source) &&
+    /const trackingFinalUrl = computed/.test(source) &&
+    /@click="copyShortLink\(trackingFinalUrlText, '目标长链接已复制'\)"/.test(source) &&
+    /const trackingFinalUrlText = computed/.test(source),
+  'campaign tracking workbench and dialog must copy the UTM-tagged target URL instead of the raw targetUrl'
+)
+
+assert(
   /templatePreviewHtml/.test(source) && /<iframe[\s\S]+:srcdoc="state\.templatePreviewHtml/.test(source),
   'mail campaign template editor must render preview HTML through an iframe srcdoc'
 )
 
 assert(
-  /addTemplateVariable/.test(source) && /insertTemplateVariable/.test(source) && /const placeholder = '\$\{' \+ key \+ '\}'/.test(source),
-  'mail campaign template editor must support variable form rows and FreeMarker placeholder insertion'
+  /insertTrackingLinkVariable/.test(source) &&
+    /const placeholder = '\$\{' \+ key \+ '\}'/.test(source) &&
+    !/添加变量/.test(source),
+  'mail campaign template editor must only expose insertion of the trackingLink short-link placeholder'
 )
 
 assert(
@@ -231,6 +252,12 @@ assert(
 )
 
 assert(
+  /function startNewCampaign\(\)[\s\S]*clearCampaignSelection\(\)[\s\S]*navigateToNav\('campaigns'\)/.test(source) &&
+    !/if \(!campaignState\(\)\.selectedCampaign && pageResult\.items\.length\) \{[\s\S]*fillCampaignForm\(pageResult\.items\[0\]\)[\s\S]*\}/.test(source),
+  'new mail campaign navigation must keep the form empty instead of letting loadCampaigns auto-fill the first campaign'
+)
+
+assert(
   /ACTIVE_NAV_STORAGE_KEY = 'travel_admin_active_nav'/.test(source) &&
     /CUSTOMER_TOOL_STORAGE_KEY = 'travel_admin_customer_tool'/.test(source) &&
     /ADMIN_NAV_QUERY_KEY = 'nav'/.test(source) &&
@@ -240,7 +267,7 @@ assert(
     /function navigateToNav\(nav[^)]*\)[\s\S]*router\.push\(navToPath\(nav, [^)]*customerTool\)\)/.test(source) &&
     /function normalizeActiveNavAccess\([^)]*\)/.test(source) &&
     /function syncNavigationFromRoute\(pathname[^)]*queryNav = ''[^)]*\)[\s\S]*resolveNavigationFromLocation\(pathname, queryNav\)/.test(source) &&
-    /if \(appStore\.token\) \{[\s\S]*normalizeActiveNavAccess\(\)[\s\S]*refreshAll\(\)/.test(source) &&
+    /if \(appStore\.token\) \{[\s\S]*appStore\.normalizeActiveNavAccess\(\)[\s\S]*\}/.test(source) &&
     /function replaceWithActiveNav\(\)[\s\S]*router\.replace\(navToPath\([^)]*activeNav, [^)]*customerTool\)\)/.test(source) &&
     /function replaceWithLogin\(\)[\s\S]*router\.replace\('\/login'\)/.test(source),
   'admin must restore deep-linked or saved navigation and normalize inaccessible pages after refresh'
@@ -252,10 +279,11 @@ assert(
 )
 
 assert(
-  /route\.fullPath[\s\S]*syncNavigationFromRoute[\s\S]*route\.path[\s\S]*queryNav[\s\S]*refreshAll\(\)/.test(source) &&
-    /function refreshIfCurrentRoute\(targetPath[^)]*\)[\s\S]*route\.path === targetPath[\s\S]*refreshAll\(\)/.test(source) &&
-    /v-for="child in navChildItems\(item\.key\)"[\s\S]*:to="navToPath\(child\.key\)"/.test(source),
-  'admin sidebar navigation must reload route data like a browser refresh, including re-clicking the current route'
+  /route\.fullPath[\s\S]*syncNavigationFromRoute[\s\S]*route\.path[\s\S]*queryNav/.test(source) &&
+    /v-for="child in navChildItems\(item\.key\)"[\s\S]*:to="navToPath\(child\.key\)"/.test(source) &&
+    /key: 'campaigns'[\s\S]*parentKey: 'campaign-list'[\s\S]*hideFromMenu: true/.test(source) &&
+    /navChildItems\(parentKey[^)]*\)[\s\S]*item\.parentKey === parentKey[\s\S]*!item\.hideFromMenu/.test(source),
+  'admin sidebar navigation must sync route state and hide campaign detail editing from the menu'
 )
 
 assert(
@@ -339,7 +367,7 @@ assert(
 
 assert(
   /trackingShortUrl/.test(source) &&
-    /复制短链/.test(source),
+    /完整短链已复制/.test(source),
   'mail campaign pre-push records must show generated tracking short links'
 )
 
@@ -353,16 +381,16 @@ assert(
 )
 
 assert(
-    /testEmailDialogOpen/.test(source) &&
-    /\/api\/campaigns\/test-emails/.test(source) &&
-    /deleteTestEmail/.test(source) &&
-    /testEmails: .*selectedTestEmails/.test(source) &&
-    /action === 'simulateSend' && !options\.confirmedTestEmails/.test(source) &&
-    /action === 'simulateSend'[\s\S]*closeTestEmailDialog\(\)[\s\S]*selectedTestEmails = \[\][\s\S]*模拟发送成功/.test(source) &&
-    /advanceCampaignStep\(\{ confirmedTestEmails: true \}\)/.test(source) &&
-    /选择测试邮箱/.test(source) &&
-    /模拟发送到测试邮箱/.test(source),
-  'mail campaign simulation must open the persisted tenant test email dialog, close it after success, and show a success notice'
+    /testCustomerDialogOpen/.test(source) &&
+    /\/api\/customers\/search\?\$\{query\}\$\{separator\}hasEmail=true/.test(source) &&
+    /customersApi\.searchWithEmail\(query\.toString\(\)\)/.test(source) &&
+    /testCustomers: [\s\S]*selectedTestCustomerIds/.test(source) &&
+    /action === 'simulateSend' && !options\.confirmedTestCustomers/.test(source) &&
+    /action === 'simulateSend'[\s\S]*closeTestCustomerDialog\(\)[\s\S]*selectedTestCustomerIds = \[\][\s\S]*模拟发送成功/.test(source) &&
+    /advanceCampaignStep\(\{ confirmedTestCustomers: true \}\)/.test(source) &&
+    /选择测试客户/.test(source) &&
+    /模拟发送到测试客户/.test(source),
+  'mail campaign simulation must select real customer assets, close after success, and show a success notice'
 )
 
 assert(
@@ -380,10 +408,13 @@ assert(
     /REQUIRED_TRACKING_LINK_MESSAGE = 'HTML 模板必须包含短链参数 \$\{trackingLink\}'/.test(source) &&
     /function validateCampaignTemplateTrackingLink\(\)[\s\S]*templatePreviewError = REQUIRED_TRACKING_LINK_MESSAGE/.test(source) &&
     /<h3>短链与变量配置<\/h3>[\s\S]*tracking-link-dock[\s\S]*v-if="templateMissingTrackingLinkParam"[\s\S]*requiredTrackingLinkMessage/.test(source) &&
-    /editableTemplateVariableRows[\s\S]*REQUIRED_TRACKING_LINK_PARAM/.test(source) &&
-    /v-for="item in editableTemplateVariableRows"/.test(source) &&
+    /syncTemplateVariables\([^)]*\)[\s\S]*scanTemplateVariableKeys\(`\$\{subject \|\| ''\}\\n\$\{htmlBody \|\| ''\}`\)\.map/.test(source) &&
+    /key === REQUIRED_TRACKING_LINK_PARAM[\s\S]*TRACKING_LINK_VARIABLE/.test(source) &&
+    /template-variable-catalog/.test(source) &&
+    /v-for="option in state\.templateVariableOptions"/.test(source) &&
+    /@click="insertTemplateVariable\(option\)"/.test(source) &&
     !/<textarea[\s\S]*id="campaign-html-editor"[\s\S]*<\/textarea>\s*<div v-if="templateMissingTrackingLinkParam"/.test(source),
-  'mail campaign variable config panel must require trackingLink without repeating it in the variable list'
+  'mail campaign variable config panel must require trackingLink and expose insertable template variables in the right panel'
 )
 
 assert(

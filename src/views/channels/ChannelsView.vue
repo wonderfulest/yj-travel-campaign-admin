@@ -120,7 +120,7 @@
         </section>
 </template>
 <script setup lang="ts">
-import { proxyRefs } from 'vue'
+import { proxyRefs, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { Pencil, PlugZap, Trash2 } from 'lucide-vue-next'
 import { canAccessNav as canAccessAppNav, useAppStore } from '../../state/useAppStore'
@@ -147,4 +147,8 @@ const state = proxyRefs({
 function canAccessNav(nav: string): boolean {
   return canAccessAppNav(nav, appStore)
 }
+
+onMounted(() => {
+  void loadChannels()
+})
 </script>

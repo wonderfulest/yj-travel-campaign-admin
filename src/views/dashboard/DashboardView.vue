@@ -159,16 +159,14 @@
 
 <script setup lang="ts">
 import { CheckCircle2, Globe2, Layers, Send } from 'lucide-vue-next'
+import { onMounted } from 'vue'
 import StatGrid from '../../components/common/StatGrid.vue'
 import {
   changeCustomerCountryTop,
   formatCountryShare,
-  useCustomerStore
+  useCustomerStore,
+  loadCustomerSummary
 } from '../../state/useCustomerStore'
-import {
-  segmentReadinessBars,
-  segmentReadinessStats
-} from '../../state/useSegmentStore'
 import {
   customerQualityStats,
   customerContactStats,
@@ -179,7 +177,17 @@ import {
   statusLabel,
   uiSetActiveNav as setActiveNav
 } from '../../state/useUiStore'
+import {
+  loadSegmentSummary,
+  segmentReadinessBars,
+  segmentReadinessStats
+} from '../../state/useSegmentStore'
 
 const customerState = useCustomerStore()
 const countryTopOptions = [5, 10, 20, 50]
+
+onMounted(() => {
+  void loadCustomerSummary()
+  void loadSegmentSummary()
+})
 </script>

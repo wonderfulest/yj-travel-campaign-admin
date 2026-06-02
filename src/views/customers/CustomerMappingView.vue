@@ -75,7 +75,7 @@
         </section>
 </template>
 <script setup lang="ts">
-import { proxyRefs } from 'vue'
+import { proxyRefs, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { GitMerge } from 'lucide-vue-next'
 import { useAppStore } from '../../state/useAppStore'
@@ -86,5 +86,9 @@ const customerStore = useCustomerStore()
 const state = proxyRefs({
   ...storeToRefs(appStore),
   ...storeToRefs(customerStore)
+})
+
+onMounted(() => {
+  void loadMappingPreview()
 })
 </script>

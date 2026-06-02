@@ -62,11 +62,13 @@ export function createApiRequest(getToken: TokenProvider) {
     const contentType = String(apiResponse.headers['content-type'] || '')
     const text = apiResponse.data ?? ''
     if (contentType.includes('application/json')) {
+      let parsed: unknown
       try {
-        return JSON.parse(text)
+        parsed = JSON.parse(text)
       } catch {
         return text
       }
+      return unwrapApiResponse(parsed)
     }
     return text
   }
@@ -78,10 +80,24 @@ export function extractApiErrorMessage(response: Pick<Response, 'headers'>, text
   if (contentType.includes('application/json')) {
     try {
       const parsed = JSON.parse(text) as Record<string, unknown>
-      return String(parsed.detail || parsed.message || parsed.title || '')
+      return typeof parsed.msg === 'string' ? parsed.msg : ''
     } catch {
       return text
     }
   }
   return text
+}
+
+function unwrapApiResponse(parsed: unknown) {
+  if (!isApiEnvelope(parsed)) return parsed
+  if (parsed.code !== 0) {
+    throw new Error(parsed.msg || '请求处理失败')
+  }
+  return parsed.data
+}
+
+function isApiEnvelope(value: unknown): value is { code: number; msg: string; data: unknown } {
+  if (!value || typeof value !== 'object') return false
+  const candidate = value as Record<string, unknown>
+  return typeof candidate.code === 'number' && typeof candidate.msg === 'string' && 'data' in candidate
 }

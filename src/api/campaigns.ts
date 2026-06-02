@@ -1,5 +1,5 @@
 import { request } from './request'
-import type { Campaign, TestEmail } from '../types'
+import type { Campaign, TemplateVariableOption } from '../types'
 
 export type CampaignActionKey = 'prePush' | 'confirm' | 'simulateSend'
 
@@ -23,6 +23,15 @@ export const campaignsApi = {
       method: 'POST',
       body: JSON.stringify(body)
     }) as Promise<Campaign>
+  },
+  get(id: string | number): Promise<Campaign> {
+    return request(`/api/campaigns/${id}`) as Promise<Campaign>
+  },
+  listTemplateVariables(): Promise<TemplateVariableOption[]> {
+    return request('/api/campaigns/template/variables') as Promise<TemplateVariableOption[]>
+  },
+  remove(id: string | number): Promise<unknown> {
+    return request(`/api/campaigns/${id}`, { method: 'DELETE' })
   },
   updateTemplate(id: string | number, payload: unknown): Promise<Campaign> {
     return request(`/api/campaigns/${id}/template`, {
@@ -66,16 +75,4 @@ export const campaignsApi = {
       body: JSON.stringify(body)
     }) as Promise<Campaign>
   },
-  listTestEmails(): Promise<TestEmail[]> {
-    return request('/api/campaigns/test-emails') as Promise<TestEmail[]>
-  },
-  addTestEmail(email: string): Promise<unknown> {
-    return request('/api/campaigns/test-emails', {
-      method: 'POST',
-      body: JSON.stringify({ email })
-    })
-  },
-  deleteTestEmail(id: string | number): Promise<unknown> {
-    return request(`/api/campaigns/test-emails/${id}`, { method: 'DELETE' })
-  }
 }

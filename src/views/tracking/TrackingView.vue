@@ -162,11 +162,11 @@
         </section>
 </template>
 <script setup lang="ts">
-import { proxyRefs } from 'vue'
+import { proxyRefs, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { BarChart3, CheckCircle2, ExternalLink, Eye, Layers, RefreshCw, Users } from 'lucide-vue-next'
 import { canAccessNav as canAccessAppNav, useAppStore } from '../../state/useAppStore'
-import { useCampaignStore } from '../../state/useCampaignStore'
+import { loadCampaigns, useCampaignStore } from '../../state/useCampaignStore'
 import {
   changeTrackingEventPage,
   changeTrackingLinkPage,
@@ -189,4 +189,8 @@ const state = proxyRefs({
 function canAccessNav(nav: string): boolean {
   return canAccessAppNav(nav, appStore)
 }
+
+onMounted(() => {
+  void Promise.allSettled([loadCampaigns(), loadTrackingAnalytics()])
+})
 </script>

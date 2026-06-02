@@ -116,6 +116,11 @@ export interface TenantApiSecretRotationResult {
   rotatedAt: string
 }
 
+export interface CustomerSearchIndexSyncResult {
+  tenantId: string
+  indexedAssets: number
+}
+
 // ==================== 客户资产 ====================
 
 export interface Customer {
@@ -280,6 +285,7 @@ export interface SegmentRefreshResult {
 export interface TrackingLink {
   targetUrl: string
   shortCode: string
+  shortLinkBaseUrl?: string
   utmSource: string
   utmMedium: string
   utmCampaign: string
@@ -324,12 +330,16 @@ export interface CampaignForm {
   segmentIds: (string | number)[]
 }
 
-// ==================== 测试邮箱 ====================
-
-export interface TestEmail {
-  id: string | number
-  email: string
+export interface TemplateVariableOption {
+  category: string
+  key: string
+  label: string
+  description?: string
+  sampleValue?: string
+  required?: boolean
 }
+
+// ==================== 测试客户 ====================
 
 // ==================== 短链统计 ====================
 

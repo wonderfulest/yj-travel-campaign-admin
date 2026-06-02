@@ -12,26 +12,42 @@ const existingVariables = [
 
 const synced = syncTemplateVariables({
   subject: 'Special offer for ${customerName} from ${travelAdvisor}',
-  htmlBody: '<p>Hello ${customerName}, book with ${companyName} and ${destinationName}</p>',
+  htmlBody: '<p>Hello ${customerName}, book with ${companyName} and ${destinationName}</p><a href="${trackingLink}">View</a>',
   variables: existingVariables
 })
 
 assert.deepEqual(
   synced.map((variable) => variable.key),
-  ['customerName', 'travelAdvisor', 'companyName', 'destinationName'],
-  'template variables must match placeholders from subject and HTML in first-seen order'
+  ['customerName', 'travelAdvisor', 'companyName', 'destinationName', 'trackingLink'],
+  'template variables must include all placeholders from the subject and HTML'
+)
+
+assert.equal(
+  synced.find((variable) => variable.key === 'trackingLink').label,
+  '短链',
+  'trackingLink must use the short-link variable label'
+)
+
+assert.deepEqual(
+  syncTemplateVariables({
+    subject: 'Special offer for ${customerName}',
+    htmlBody: '<p>Hello ${companyName}</p>',
+    variables: existingVariables
+  }).map((variable) => variable.key),
+  ['customerName', 'companyName'],
+  'template variable config must mirror non-short-link placeholders from the template'
 )
 
 assert.equal(
   synced.find((variable) => variable.key === 'customerName').label,
   '客户名称',
-  'existing variable metadata must be preserved for placeholders that remain in the template'
+  'synced variables must preserve existing labels'
 )
 
 assert.equal(
   synced.find((variable) => variable.key === 'travelAdvisor').label,
   'travelAdvisor',
-  'new subject placeholders must be added to variable config'
+  'new variables must default their label to the variable key'
 )
 
 assert.equal(
@@ -49,18 +65,21 @@ assert(
 
 const renderedPreview = renderTemplatePreview({
   subject: 'Special offer for ${customerName}',
-  htmlBody: '<p>Hello ${customerName}, book with ${companyName}</p>',
-  variables: existingVariables
+  htmlBody: '<p>Hello ${customerName}, book with ${companyName}</p><a href="${trackingLink}">View</a>',
+  variables: synced,
+  runtimeVariables: {
+    trackingLink: 'https://go.example.com/uk-agency-202605'
+  }
 })
 
 assert.equal(
   renderedPreview.subjectPreview,
   'Special offer for Reisen Scala',
-  'local template preview must render subject placeholders with sample values'
+  'local template preview must render configured non-short-link placeholders'
 )
 
 assert.equal(
   renderedPreview.htmlPreview,
-  '<p>Hello Reisen Scala, book with Youjie Tech</p>',
-  'local template preview must render HTML placeholders with sample values'
+  '<p>Hello Reisen Scala, book with Youjie Tech</p><a href="https://go.example.com/uk-agency-202605">View</a>',
+  'local template preview must render configured variables and trackingLink from the saved short-link configuration'
 )

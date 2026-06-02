@@ -59,7 +59,7 @@ export const useAppStore = defineStore('app', {
       return navItems.filter((item) => canAccessNav(item.key, this))
     },
     availablePrimaryNavItems() {
-      return this.availableNavItems.filter((item) => !item.parentKey)
+      return this.availableNavItems.filter((item) => !item.parentKey && !item.hideFromMenu)
     },
     primaryRole(): UserRole {
       return this.currentRoles[0]
@@ -111,11 +111,11 @@ export const useAppStore = defineStore('app', {
       onNavSideEffect?.(nav)
     },
     navChildItems(parentKey: string) {
-      return navItems.filter((item) => item.parentKey === parentKey && canAccessNav(item.key, this))
+      return navItems.filter((item) => item.parentKey === parentKey && !item.hideFromMenu && canAccessNav(item.key, this))
     },
     isNavItemActive(item: { key: string }) {
       if (this.activeNav === item.key) return true
-      return this.navChildItems(item.key).some((child) => child.key === this.activeNav)
+      return navItems.some((child) => child.parentKey === item.key && child.key === this.activeNav)
     },
     toggleSidebar() {
       this.sidebarCollapsed = !this.sidebarCollapsed
@@ -226,6 +226,7 @@ export const navItems = [
     label: '邮件活动',
     icon: Send,
     parentKey: 'campaign-list',
+    hideFromMenu: true,
     title: '邮件活动详情',
     description: '创建活动、编辑模板、选择通道和客群，生成预推送并模拟发送'
   },
@@ -298,12 +299,12 @@ export function normalizeActiveNavAccess(store: ReturnType<typeof useAppStore>) 
 }
 
 export function navChildItems(parentKey: string, store: ReturnType<typeof useAppStore>) {
-  return navItems.filter((item) => item.parentKey === parentKey && canAccessNav(item.key, store))
+  return navItems.filter((item) => item.parentKey === parentKey && !item.hideFromMenu && canAccessNav(item.key, store))
 }
 
 export function isNavItemActive(item: { key: string }, store: ReturnType<typeof useAppStore>): boolean {
   if (store.activeNav === item.key) return true
-  return navChildItems(item.key, store).some((child) => child.key === store.activeNav)
+  return navItems.some((child) => child.parentKey === item.key && child.key === store.activeNav)
 }
 
 export function toggleSidebar(store: ReturnType<typeof useAppStore>): void {

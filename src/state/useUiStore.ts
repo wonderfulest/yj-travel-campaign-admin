@@ -102,11 +102,11 @@ export const reachabilityDonut = computed(() => {
 
 // ─── Utility formatters (re-exported from src/utils/format) ───────────────────
 
-export async function copyShortLink(url: string): Promise<void> {
+export async function copyShortLink(url: string, notice = '短链已复制'): Promise<void> {
   if (!url) return
   try {
     await navigator.clipboard?.writeText(url)
-    appState().notice = '短链已复制'
+    appState().notice = notice
   } catch {
     appState().notice = url
   }
@@ -174,6 +174,6 @@ export function startNewCampaign(): void {
 
 export function openCampaignDetail(campaign: Campaign): void {
   fillCampaignForm(campaign)
-  navigateToNav('campaigns')
+  navigateToNav('campaigns', { campaignId: campaign.id })
   appState().error = ''
 }

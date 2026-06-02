@@ -4,7 +4,6 @@ import router from './router'
 import { pinia } from './state/pinia'
 import { useAppStore } from './state/useAppStore'
 import { updateLocalTemplatePreview } from './state/useCampaignStore'
-import { refreshAll } from './state/refresh'
 import { setTokenProvider } from './api/request'
 import './assets/styles/global.css'
 
@@ -17,7 +16,6 @@ updateLocalTemplatePreview()
 
 if (appStore.token) {
   appStore.normalizeActiveNavAccess()
-  void refreshAll()
 }
 
 router.isReady().then(() => {

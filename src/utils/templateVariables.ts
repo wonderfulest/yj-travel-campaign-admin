@@ -1,6 +1,13 @@
 import type { TemplateVariable } from '../types'
 
 const TEMPLATE_VARIABLE_PATTERN = /\$\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}/g
+const REQUIRED_TRACKING_LINK_PARAM = 'trackingLink'
+const TRACKING_LINK_VARIABLE: TemplateVariable = {
+  key: REQUIRED_TRACKING_LINK_PARAM,
+  label: '短链',
+  sampleValue: 'https://s.example.com/china-trip-demo',
+  required: true
+}
 
 type TemplateVariableLike = Partial<TemplateVariable> & {
   key?: unknown
@@ -31,11 +38,13 @@ export function templateVariablesToJson(variables: TemplateVariable[]) {
 export function renderTemplatePreview({
   subject,
   htmlBody,
-  variables
+  variables,
+  runtimeVariables
 }: {
   subject: string
   htmlBody: string
   variables: TemplateVariable[]
+  runtimeVariables?: Record<string, unknown>
 }) {
   const valuesByKey = new Map(
     normalizeTemplateVariables(variables).map((variable) => [
@@ -43,6 +52,11 @@ export function renderTemplatePreview({
       variable.sampleValue || variable.label || variable.key
     ])
   )
+  Object.entries(runtimeVariables || {}).forEach(([key, value]) => {
+    const normalizedKey = String(key || '').trim()
+    if (!normalizedKey || value === null || value === undefined) return
+    valuesByKey.set(normalizedKey, String(value))
+  })
   return {
     subjectPreview: renderTemplateText(subject, valuesByKey),
     htmlPreview: renderTemplateText(htmlBody, valuesByKey)
@@ -61,15 +75,20 @@ export function syncTemplateVariables({
   const existingByKey = new Map(
     normalizeTemplateVariables(variables).map((variable) => [variable.key, variable])
   )
-
   return scanTemplateVariableKeys(`${subject || ''}\n${htmlBody || ''}`).map((key) => {
     const existing = existingByKey.get(key)
-    if (existing) return existing
+    if (key === REQUIRED_TRACKING_LINK_PARAM) {
+      return {
+        ...TRACKING_LINK_VARIABLE,
+        label: existing?.label || TRACKING_LINK_VARIABLE.label,
+        sampleValue: existing?.sampleValue || TRACKING_LINK_VARIABLE.sampleValue
+      }
+    }
     return {
       key,
-      label: key,
-      sampleValue: '',
-      required: false
+      label: existing?.label || key,
+      sampleValue: existing?.sampleValue || '',
+      required: existing?.required || false
     }
   })
 }
@@ -110,4 +129,3 @@ function renderTemplateText(source: string, valuesByKey: Map<string, string>) {
     return valuesByKey.get(normalizedKey) || ''
   })
 }
-

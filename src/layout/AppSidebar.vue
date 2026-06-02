@@ -26,7 +26,6 @@
           :class="{active: isActive(item.key), 'child-active': route.path.startsWith('/campaigns') && item.key === 'campaign-list' && route.path !== '/campaign-list'}"
           :to="navToPath(item.key)"
           :title="sidebarCollapsed ? item.label : ''"
-          @click="refreshIfCurrentRoute(navToPath(item.key))"
         >
           <component :is="item.icon" :size="18" />{{ item.label }}
         </RouterLink>
@@ -38,7 +37,6 @@
             :class="{active: isActive(child.key)}"
             :to="navToPath(child.key)"
             :title="sidebarCollapsed ? child.label : ''"
-            @click="refreshIfCurrentRoute(navToPath(child.key))"
             >
             <span>{{ child.label }}</span>
           </RouterLink>
@@ -54,7 +52,6 @@ import { storeToRefs } from 'pinia'
 import { Mail, PanelLeftClose, PanelLeftOpen } from 'lucide-vue-next'
 import { navToPath } from '../navigation'
 import { useAppStore } from '../state/useAppStore'
-import { refreshAll } from '../state/refresh'
 
 const appStore = useAppStore()
 const { sidebarCollapsed } = storeToRefs(appStore)
@@ -75,10 +72,5 @@ function isActive(key: string): boolean {
   return route.path === navToPath(key) || route.path.startsWith(`/${key}/`)
 }
 
-function refreshIfCurrentRoute(targetPath: string): void {
-  if (route.path === targetPath) {
-    void refreshAll()
-  }
-}
 
 </script>

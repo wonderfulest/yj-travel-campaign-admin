@@ -48,6 +48,7 @@ export const useCustomerStore = defineStore('customer', {
       hasNext: false,
       hasPrevious: false
     },
+    customerSearchIndexSyncing: false,
     customerCountryTop: 10,
     filter: '',
     selectedCustomer: null as Customer | null,
@@ -77,13 +78,7 @@ const customerState = () => useCustomerStore()
 const appState = () => useAppStore()
 
 export const filteredCustomers = computed(() => {
-  const keyword = customerState().filter.trim().toLowerCase()
-  if (!keyword) return customerState().customers
-  return customerState().customers.filter((item) =>
-    [item.name, item.email, item.website, item.country, item.city, item.sourcePrimary]
-      .filter(Boolean)
-      .some((value) => String(value).toLowerCase().includes(keyword))
-  )
+  return customerState().customers
 })
 
 
@@ -233,7 +228,9 @@ export async function changeCustomerCountryTop(topCountries: number): Promise<vo
 
 export async function loadCustomers(page = customerState().customerPage.page): Promise<void> {
   try {
-    const result = await customersApi.list(pageQuery(customerState().customerPage, page))
+    const query = pageQuery(customerState().customerPage, page)
+    const keyword = customerState().filter.trim()
+    const result = keyword ? await customersApi.search(query, keyword) : await customersApi.list(query)
     const pageResult = normalizePageResult<Customer>(result, [], page, customerState().customerPage.size)
     customerState().customers = pageResult.items
     customerState().customerPage = pageResult
@@ -246,6 +243,33 @@ export async function loadCustomers(page = customerState().customerPage.page): P
     customerState().customerPage = emptyPageResult<Customer>(0, customerState().customerPage.size)
     customerState().selectedCustomer = null
     appState().error = `客户资产加载失败：${err.message}`
+  }
+}
+
+let customerSearchTimer: ReturnType<typeof window.setTimeout> | null = null
+
+export function searchCustomers(): void {
+  if (customerSearchTimer) {
+    window.clearTimeout(customerSearchTimer)
+  }
+  customerSearchTimer = window.setTimeout(() => {
+    void loadCustomers(0)
+  }, 300)
+}
+
+export async function syncCustomerSearchIndex(): Promise<void> {
+  if (customerState().customerSearchIndexSyncing) return
+  customerState().customerSearchIndexSyncing = true
+  appState().error = ''
+  appState().notice = ''
+  try {
+    const result = await customersApi.syncSearchIndex()
+    appState().notice = `搜索引擎索引同步完成，共同步 ${result.indexedAssets} 条客户资产`
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    appState().error = `搜索引擎索引同步失败：${err.message || '请求处理失败'}`
+  } finally {
+    customerState().customerSearchIndexSyncing = false
   }
 }
 
