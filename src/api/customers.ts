@@ -18,8 +18,8 @@ export const customersApi = {
   getAssetProfile(id: string | number): Promise<CustomerProfile> {
     return request(`/api/customers/${id}/asset-profile`) as Promise<CustomerProfile>
   },
-  getSummary(): Promise<CustomerSummary> {
-    return request('/api/customers/summary') as Promise<CustomerSummary>
+  getSummary(topCountries = 10): Promise<CustomerSummary> {
+    return request(`/api/customers/summary?topCountries=${encodeURIComponent(String(topCountries))}`) as Promise<CustomerSummary>
   },
   list(query: string): Promise<unknown> {
     return request(`/api/customers?${query}`)

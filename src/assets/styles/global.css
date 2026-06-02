@@ -435,6 +435,31 @@ select[multiple] {
   grid-column: 1 / -1;
 }
 
+.dashboard-country-panel .panel-title {
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dashboard-country-panel .panel-title > span,
+.country-top-control {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+
+.country-top-control {
+  color: #64748b;
+  flex: 0 0 auto;
+  font-size: 0.84rem;
+}
+
+.country-top-control select {
+  min-height: 34px;
+  min-width: 72px;
+  padding: 6px 28px 6px 10px;
+}
+
 .dashboard-analysis-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -125,8 +125,16 @@
 
       <article class="ops-panel dashboard-country-panel">
         <div class="panel-title">
-          <Globe2 :size="19" />
-          <h3>客户资产国家分布</h3>
+          <span>
+            <Globe2 :size="19" />
+            <h3>客户资产国家分布</h3>
+          </span>
+          <label class="country-top-control">
+            <span>Top</span>
+            <select v-model.number="customerState.customerCountryTop" @change="changeCustomerCountryTop(customerState.customerCountryTop)">
+              <option v-for="option in countryTopOptions" :key="option" :value="option">{{ option }}</option>
+            </select>
+          </label>
         </div>
         <div v-if="customerCountryStats?.length" class="country-stat-list">
           <button
@@ -153,7 +161,9 @@
 import { CheckCircle2, Globe2, Layers, Send } from 'lucide-vue-next'
 import StatGrid from '../../components/common/StatGrid.vue'
 import {
-  formatCountryShare
+  changeCustomerCountryTop,
+  formatCountryShare,
+  useCustomerStore
 } from '../../state/useCustomerStore'
 import {
   segmentReadinessBars,
@@ -169,4 +179,7 @@ import {
   statusLabel,
   uiSetActiveNav as setActiveNav
 } from '../../state/useUiStore'
+
+const customerState = useCustomerStore()
+const countryTopOptions = [5, 10, 20, 50]
 </script>

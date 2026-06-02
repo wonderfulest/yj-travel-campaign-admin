@@ -84,7 +84,7 @@ assert(
 )
 
 assert(
-  /request\('\/api\/customers\/summary'\)/.test(source),
+  /\/api\/customers\/summary\?topCountries=/.test(source),
   'dashboard customer totals must be loaded from /api/customers/summary'
 )
 

@@ -48,6 +48,7 @@ export const useCustomerStore = defineStore('customer', {
       hasNext: false,
       hasPrevious: false
     },
+    customerCountryTop: 10,
     filter: '',
     selectedCustomer: null as Customer | null,
     customerProfile: null as CustomerProfile | null,
@@ -218,11 +219,16 @@ export async function loadCustomerProfile(customer: Customer | null = customerSt
 
 export async function loadCustomerSummary(): Promise<void> {
   try {
-    customerState().customerSummary = await customersApi.getSummary()
+    customerState().customerSummary = await customersApi.getSummary(customerState().customerCountryTop)
   } catch (error) {
     customerState().customerSummary = null
     appState().error = `客户统计加载失败：${error.message}`
   }
+}
+
+export async function changeCustomerCountryTop(topCountries: number): Promise<void> {
+  customerState().customerCountryTop = Number(topCountries || 10)
+  await loadCustomerSummary()
 }
 
 export async function loadCustomers(page = customerState().customerPage.page): Promise<void> {
