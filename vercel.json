@@ -5,7 +5,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://api.yj-travel.garminface.com/api/$1"
+      "destination": "https://yj-travel-api.garminface.com/api/$1"
     },
     {
       "source": "/(.*)",
