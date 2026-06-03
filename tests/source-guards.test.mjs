@@ -232,7 +232,8 @@ assert(
 assert(
   /insertTrackingLinkVariable/.test(source) &&
     /const placeholder = '\$\{' \+ key \+ '\}'/.test(source) &&
-    !/添加变量/.test(source),
+    !/添加变量/.test(source) &&
+    !/插入变量到 UTM/.test(source),
   'mail campaign template editor must only expose insertion of the trackingLink short-link placeholder'
 )
 
@@ -363,6 +364,17 @@ assert(
     /\/api\/tracking\/analytics\/by-link/.test(source) &&
     /\/api\/tracking\/analytics\/events/.test(source),
   'admin must expose a short-link analytics page backed by tracking analytics APIs'
+)
+
+assert(
+  /<CustomerAssetDialog \/>/.test(source) &&
+    /openTrackingCustomerDetail\(event\)/.test(source) &&
+    /openCustomerDetail\(trackingEventCustomer\(event\)\)/.test(source) &&
+    /utmTags\(event\)/.test(source) &&
+    /\['src', event\.utmSource\]/.test(source) &&
+    /\['med', event\.utmMedium\]/.test(source) &&
+    /\['cmp', event\.utmCampaign\]/.test(source),
+  'tracking click detail must show UTM tags and reuse the customer asset detail dialog from clickable customer ids'
 )
 
 assert(

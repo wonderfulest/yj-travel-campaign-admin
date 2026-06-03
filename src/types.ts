@@ -125,21 +125,29 @@ export interface CustomerSearchIndexSyncResult {
 
 export interface Customer {
   id: string
+  tenantId?: string
+  assetType?: string
   name: string
   country: string
+  region?: string
   city: string
   email: string
+  emailNormalized?: string
   website: string
   phone: string
   emailQuality: EmailQuality
   contactStatus: ContactStatus
   sourcePrimary: string
+  sourceObjectId?: string
+  rawPayload?: string
   longitude?: number
   latitude?: number
   postcode?: string
   street?: string
   houseNumber?: string
   businessScope?: string
+  timezone?: string
+  createdAt?: string
 }
 
 export interface CustomerSegmentMember extends Partial<Customer> {
@@ -310,6 +318,20 @@ export interface Campaign {
   segmentIds?: (string | number)[]
   template?: CampaignTemplate
   trackingLink?: TrackingLink
+  prePushRecords?: PrePushRecord[]
+}
+
+export interface PrePushRecord {
+  campaignId: string | number
+  customerId: string | number
+  customerName?: string
+  email?: string
+  status: string
+  exclusionReason?: string
+  trackingLinkCode?: string
+  trackingShortUrl?: string
+  trackingFinalUrl?: string
+  recipientToken?: string
 }
 
 export interface CampaignForm {
@@ -363,24 +385,59 @@ export interface TrackingUtmStat {
 }
 
 export interface TrackingLinkStat {
+  shortLinkId?: string
   shortCode: string
+  shortUrl?: string
+  finalUrl?: string
   targetUrl: string
   clicks: number
+  customers?: number
 }
 
-export interface TrackingEvent {
+export interface TrackingEventLink {
   id: string
-  customerId: string
+  code: string
+  tenantId: string
   campaignId: string
-  shortCode: string
-  clickedAt: string
-  ipAddress?: string
-  userAgent?: string
+  customerId?: string
+  originalUrl?: string
+  finalUrl?: string
+  shortUrl?: string
   utmSource?: string
   utmMedium?: string
   utmCampaign?: string
   utmContent?: string
   utmTerm?: string
+}
+
+export interface TrackingEvent {
+  id: string
+  tenantId?: string
+  customerId: string
+  customer?: Customer | null
+  pushRecordId?: string
+  campaignId: string
+  shortLinkId?: string
+  shortCode: string
+  clickedAt: string
+  redirectUrl?: string
+  referrer?: string
+  ipHash?: string
+  userAgent?: string
+  country?: string
+  city?: string
+  deviceType?: string
+  browser?: string
+  os?: string
+  originalUrl?: string
+  finalUrl?: string
+  shortUrl?: string
+  utmSource?: string
+  utmMedium?: string
+  utmCampaign?: string
+  utmContent?: string
+  utmTerm?: string
+  trackingLink?: TrackingEventLink | null
 }
 
 export interface TrackingFilter {

@@ -30,27 +30,11 @@
                 <span class="fieldset-label">目标长链</span>
                 <label>targetUrl<input v-model="state.campaignForm.trackingTargetUrl" /></label>
                 <div class="utm-grid">
-                  <label>utm_source<input id="tracking-utm-source" v-model="state.campaignForm.trackingUtmSource" @focus="focusUtmField('trackingUtmSource', 'tracking-utm-source')" /></label>
-                  <label>utm_medium<input id="tracking-utm-medium" v-model="state.campaignForm.trackingUtmMedium" @focus="focusUtmField('trackingUtmMedium', 'tracking-utm-medium')" /></label>
-                  <label>utm_campaign<input id="tracking-utm-campaign" v-model="state.campaignForm.trackingUtmCampaign" @focus="focusUtmField('trackingUtmCampaign', 'tracking-utm-campaign')" /></label>
-                  <label>utm_content<input id="tracking-utm-content" v-model="state.campaignForm.trackingUtmContent" @focus="focusUtmField('trackingUtmContent', 'tracking-utm-content')" /></label>
-                  <label>utm_term<input id="tracking-utm-term" v-model="state.campaignForm.trackingUtmTerm" @focus="focusUtmField('trackingUtmTerm', 'tracking-utm-term')" /></label>
-                </div>
-                <div class="utm-variable-insert">
-                  <span>插入变量到 UTM</span>
-                  <div class="utm-variable-grid">
-                    <button
-                      v-for="option in state.templateVariableOptions"
-                      :key="option.key"
-                      class="variable-chip"
-                      type="button"
-                      :title="option.description || option.label"
-                      @click="insertUtmVariable(option)"
-                    >
-                      <span>{{ option.label || option.key }}</span>
-                      <code>{{ '${' + option.key + '}' }}</code>
-                    </button>
-                  </div>
+                  <label>utm_source<input v-model="state.campaignForm.trackingUtmSource" /></label>
+                  <label>utm_medium<input v-model="state.campaignForm.trackingUtmMedium" /></label>
+                  <label>utm_campaign<input v-model="state.campaignForm.trackingUtmCampaign" /></label>
+                  <label>utm_content<input v-model="state.campaignForm.trackingUtmContent" /></label>
+                  <label>utm_term<input v-model="state.campaignForm.trackingUtmTerm" /></label>
                 </div>
                 <dl class="tracking-link-summary">
                   <div class="tracking-link-field">
@@ -148,7 +132,7 @@
         </div>
 </template>
 <script setup lang="ts">
-import { computed, proxyRefs, ref } from 'vue'
+import { computed, proxyRefs } from 'vue'
 import { storeToRefs } from 'pinia'
 import { CheckCircle2, Copy, Search, Send, X } from 'lucide-vue-next'
 import { useAppStore } from '../../state/useAppStore'
@@ -158,7 +142,6 @@ import {
   closeTrackingLinkDialog,
   confirmFinalPush,
   confirmTestSimulation,
-  insertCampaignFormVariable,
   isTestCustomerSelected,
   loadTestCustomers,
   saveCampaignTrackingLink,
@@ -180,11 +163,6 @@ const selectedTestCustomers = computed<Customer[]>(() =>
     .map((id) => state.testCustomers.find((customer) => String(customer.id) === String(id)))
     .filter((customer): customer is Customer => Boolean(customer))
 )
-type UmtFormField = 'trackingUtmSource' | 'trackingUtmMedium' | 'trackingUtmCampaign' | 'trackingUtmContent' | 'trackingUtmTerm'
-const focusedUtmField = ref<{ field: UmtFormField; elementId: string }>({
-  field: 'trackingUtmContent',
-  elementId: 'tracking-utm-content'
-})
 const shortLinkBaseUrlText = computed(() => state.selectedCampaign?.trackingLink?.shortLinkBaseUrl || '保存后由后端返回')
 const trackingFinalUrlText = computed(() => trackingFinalUrl({
   targetUrl: state.campaignForm.trackingTargetUrl,
@@ -195,11 +173,4 @@ const trackingFinalUrlText = computed(() => trackingFinalUrl({
   utmTerm: state.campaignForm.trackingUtmTerm
 }))
 
-function focusUtmField(field: UmtFormField, elementId: string): void {
-  focusedUtmField.value = { field, elementId }
-}
-
-function insertUtmVariable(option: { key?: string }): void {
-  void insertCampaignFormVariable(focusedUtmField.value.field, option, focusedUtmField.value.elementId)
-}
 </script>

@@ -18,7 +18,7 @@
         <label
           >邮件主题<input
             v-model="state.campaignForm.subject"
-            @input="syncCampaignTemplateVariables"
+            @input="handleCampaignTemplateInput"
         /></label>
         <label>发件名称<input v-model="state.campaignForm.fromName" /></label>
         <label>
@@ -139,12 +139,33 @@
             v-model="state.campaignForm.htmlBody"
             class="html-editor"
             spellcheck="false"
-            @input="syncCampaignTemplateVariables"
+            @input="handleCampaignTemplateInput"
           ></textarea>
         </section>
         <section class="template-split-pane">
-          <div class="split-pane-header">
-            <span>邮件预览</span>
+          <div class="split-pane-header preview-pane-header">
+            <div class="preview-title">
+              <span>邮件预览</span>
+              <strong>{{ state.templatePreviewSubject || "未渲染" }}</strong>
+            </div>
+            <input
+              v-model="state.templatePreviewCustomerQuery"
+              class="preview-customer-input"
+              list="template-preview-customers"
+              placeholder="搜索预览客户"
+              @input="syncTemplatePreviewCustomerSelection"
+              @change="selectTemplatePreviewCustomer"
+              @keydown.enter.prevent="searchTemplatePreviewCustomer"
+            />
+            <datalist id="template-preview-customers">
+              <option
+                v-for="customer in state.templatePreviewCustomers"
+                :key="customer.id"
+                :value="previewCustomerOptionLabel(customer)"
+              ></option>
+            </datalist>
+          </div>
+          <div class="preview-subject-mobile">
             <strong>{{ state.templatePreviewSubject || "未渲染" }}</strong>
           </div>
           <div
@@ -305,7 +326,7 @@
   </section>
 </template>
 <script setup lang="ts">
-import { computed, proxyRefs, onMounted, watch } from "vue";
+import { computed, proxyRefs, onMounted, onUnmounted, watch } from "vue";
 import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import {
@@ -341,9 +362,11 @@ import {
   isCampaignAdvanceDisabled,
   isCampaignStepDisabled,
   loadCampaignDetail,
+  loadTemplatePreviewCustomers,
   loadTemplateVariableOptions,
   openTrackingLinkDialog,
   previewCampaignTemplate,
+  refreshTemplatePreviewIfReady,
   removeCampaignSegment,
   REQUIRED_TRACKING_LINK_MESSAGE as requiredTrackingLinkMessage,
   rollbackCampaignStep,
@@ -358,6 +381,7 @@ import {
 } from "../../state/useCampaignStore";
 import { useSegmentStore } from "../../state/useSegmentStore";
 import { copyShortLink, openCampaignList } from "../../state/useUiStore";
+import type { Customer } from "../../types";
 
 const appStore = useAppStore();
 const campaignStore = useCampaignStore();
@@ -382,6 +406,7 @@ const trackingFinalUrl = computed(() => {
 const trackingShortUrl = computed(() => {
   return buildTrackingShortUrl(state.selectedCampaign?.trackingLink);
 });
+let templatePreviewTimer: ReturnType<typeof setTimeout> | undefined;
 
 function campaignIdFromRoute(): string {
   return typeof route.query.campaignId === "string" ? route.query.campaignId : "";
@@ -393,9 +418,67 @@ function syncCampaignFromRoute(): void {
   void loadCampaignDetail(campaignId);
 }
 
+function handleCampaignTemplateInput(): void {
+  syncCampaignTemplateVariables();
+  if (!state.templatePreviewCustomerId) return;
+  if (templatePreviewTimer) {
+    clearTimeout(templatePreviewTimer);
+  }
+  templatePreviewTimer = setTimeout(() => {
+    void refreshTemplatePreviewIfReady();
+  }, 500);
+}
+
+function previewCustomerOptionLabel(customer: Customer): string {
+  return `${customer.name || customer.email} / ${customer.email}`;
+}
+
+function syncTemplatePreviewCustomerSelection(): boolean {
+  const query = state.templatePreviewCustomerQuery.trim();
+  const matchedCustomer = state.templatePreviewCustomers.find((customer) => {
+    const label = previewCustomerOptionLabel(customer);
+    return (
+      label === query ||
+      customer.email === query ||
+      customer.name === query ||
+      String(customer.id) === query
+    );
+  });
+  state.templatePreviewCustomerId = matchedCustomer?.id || "";
+  return Boolean(matchedCustomer);
+}
+
+async function selectTemplatePreviewCustomer(): Promise<void> {
+  if (syncTemplatePreviewCustomerSelection()) {
+    await refreshTemplatePreviewIfReady();
+  }
+}
+
+async function searchTemplatePreviewCustomer(): Promise<void> {
+  if (syncTemplatePreviewCustomerSelection()) {
+    await refreshTemplatePreviewIfReady();
+    return;
+  }
+  await loadTemplatePreviewCustomers();
+  if (!state.templatePreviewCustomerId && state.templatePreviewCustomers.length === 1) {
+    const [customer] = state.templatePreviewCustomers;
+    state.templatePreviewCustomerId = customer.id;
+    state.templatePreviewCustomerQuery = previewCustomerOptionLabel(customer);
+    await refreshTemplatePreviewIfReady();
+  } else {
+    await selectTemplatePreviewCustomer();
+  }
+}
+
 onMounted(() => {
-  void Promise.allSettled([loadChannels(), loadSegments(), loadTemplateVariableOptions()]);
+  void Promise.allSettled([loadChannels(), loadSegments(), loadTemplateVariableOptions(), loadTemplatePreviewCustomers()]);
   syncCampaignFromRoute();
+});
+
+onUnmounted(() => {
+  if (templatePreviewTimer) {
+    clearTimeout(templatePreviewTimer);
+  }
 });
 
 watch(

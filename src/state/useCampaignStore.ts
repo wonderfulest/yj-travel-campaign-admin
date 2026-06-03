@@ -24,7 +24,6 @@ import {
 import {
   cloneTemplateVariables,
   parseTemplateVariables,
-  renderTemplatePreview,
   scanTemplateVariableKeys,
   syncTemplateVariables,
   templateVariablesToJson
@@ -67,6 +66,9 @@ export const useCampaignStore = defineStore('campaign', {
     testCustomers: [] as Customer[],
     selectedTestCustomerIds: [] as string[],
     testCustomerQuery: '',
+    templatePreviewCustomers: [] as Customer[],
+    templatePreviewCustomerId: '',
+    templatePreviewCustomerQuery: '',
     segmentDropdownOpen: false,
     segmentDropdownQuery: '',
     templateVariableOptions: [] as TemplateVariableOption[],
@@ -228,7 +230,7 @@ export function fillCampaignForm(campaign: Campaign): void {
   campaignState().segmentDropdownOpen = false
   campaignState().segmentDropdownQuery = ''
   campaignState().trackingLinkDialogOpen = false
-  updateLocalTemplatePreview()
+  resetTemplatePreview()
 }
 
 export function clearCampaignSelection(): void {
@@ -236,8 +238,11 @@ export function clearCampaignSelection(): void {
   campaignState().campaignForm = defaultCampaignForm()
   campaignState().segmentDropdownOpen = false
   campaignState().segmentDropdownQuery = ''
+  campaignState().templatePreviewCustomerId = ''
+  campaignState().templatePreviewCustomerQuery = ''
+  campaignState().templatePreviewCustomers = []
   campaignState().trackingLinkDialogOpen = false
-  updateLocalTemplatePreview()
+  resetTemplatePreview()
 }
 
 export function syncCampaignTemplateVariables(): void {
@@ -246,7 +251,7 @@ export function syncCampaignTemplateVariables(): void {
     htmlBody: campaignState().campaignForm.htmlBody,
     variables: campaignState().campaignForm.templateVariables
   })
-  updateLocalTemplatePreview()
+  resetTemplatePreview()
 }
 
 export async function loadTemplateVariableOptions(): Promise<void> {
@@ -259,18 +264,15 @@ export async function loadTemplateVariableOptions(): Promise<void> {
   }
 }
 
-export function updateLocalTemplatePreview(): void {
-  const preview = renderTemplatePreview({
-    subject: campaignState().campaignForm.subject,
-    htmlBody: campaignState().campaignForm.htmlBody,
-    variables: campaignState().campaignForm.templateVariables,
-    runtimeVariables: {
-      [REQUIRED_TRACKING_LINK_PARAM]: trackingShortUrl(campaignState().selectedCampaign?.trackingLink)
-    }
-  })
-  campaignState().templatePreviewSubject = preview.subjectPreview || ''
-  campaignState().templatePreviewHtml = preview.htmlPreview || ''
+export function resetTemplatePreview(): void {
+  campaignState().templatePreviewSubject = ''
+  campaignState().templatePreviewHtml = ''
   campaignState().templatePreviewError = ''
+}
+
+export async function refreshTemplatePreviewIfReady(): Promise<void> {
+  if (!campaignState().selectedCampaign?.id || !campaignState().templatePreviewCustomerId) return
+  await previewCampaignTemplate({ silentMissingCustomer: true })
 }
 
 export function templateVariablesJson(): string {
@@ -339,11 +341,12 @@ export interface CampaignTemplatePayload {
   fromName: string
   htmlBody: string
   variablesJson: string
+  customerId?: string
 }
 
-export function campaignTemplatePayload(): CampaignTemplatePayload {
+export function campaignTemplatePayload(customerId = ''): CampaignTemplatePayload {
   syncCampaignTemplateVariables()
-  return {
+  const payload: CampaignTemplatePayload = {
     name: campaignState().campaignForm.name,
     objective: campaignState().campaignForm.objective,
     subject: campaignState().campaignForm.subject,
@@ -351,6 +354,10 @@ export function campaignTemplatePayload(): CampaignTemplatePayload {
     htmlBody: campaignState().campaignForm.htmlBody,
     variablesJson: templateVariablesJson()
   }
+  if (customerId) {
+    payload.customerId = customerId
+  }
+  return payload
 }
 
 export function campaignHtmlHasTrackingLinkParam(): boolean {
@@ -487,6 +494,25 @@ export async function loadTestCustomers(): Promise<void> {
   }
 }
 
+export async function loadTemplatePreviewCustomers(): Promise<void> {
+  try {
+    const query = new URLSearchParams({
+      page: '0',
+      size: '20',
+      sort: 'createdAt:desc'
+    })
+    const keyword = campaignState().templatePreviewCustomerQuery.trim()
+    if (keyword) query.set('q', keyword)
+    const result = await customersApi.searchWithEmail(query.toString())
+    const pageResult = normalizePageResult<Customer>(result, [], 0, 20)
+    campaignState().templatePreviewCustomers = pageResult.items
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    campaignState().templatePreviewCustomers = []
+    appState().error = `预览客户加载失败：${err.message}`
+  }
+}
+
 export async function openTestCustomerDialog(): Promise<void> {
   if (!campaignState().selectedCampaign?.id) {
     appState().error = '请先选择或创建活动'
@@ -533,6 +559,7 @@ export async function loadCampaignDetail(campaignId: string | number): Promise<v
   try {
     const campaign = await campaignsApi.get(campaignId)
     fillCampaignForm(campaign)
+    await refreshTemplatePreviewIfReady()
     const existingIndex = campaignState().campaigns.findIndex((item) => item.id === campaign.id)
     if (existingIndex >= 0) {
       campaignState().campaigns.splice(existingIndex, 1, campaign)
@@ -556,6 +583,7 @@ export async function createCampaign(): Promise<void> {
     const campaign = await campaignsApi.create({ name: campaignState().campaignForm.name, objective: campaignState().campaignForm.objective })
     campaignState().selectedCampaign = campaign
     fillCampaignForm(campaign)
+    await refreshTemplatePreviewIfReady()
     await loadCampaigns()
     appState().notice = '邮件活动已创建'
   } catch (error: unknown) {
@@ -609,6 +637,7 @@ export async function saveCampaignSetup(): Promise<void> {
       campaign = await campaignsApi.updateSegments(campaignId, campaignState().campaignForm.segmentIds)
     }
     fillCampaignForm(campaign)
+    await refreshTemplatePreviewIfReady()
     await loadCampaigns()
     appState().notice = '活动配置已保存'
   } catch (error: unknown) {
@@ -629,6 +658,7 @@ async function saveCampaignDraftForAdvance(): Promise<Campaign | null> {
   const campaignId = campaign.id
   campaign = await campaignsApi.updateTemplate(campaignId, campaignTemplatePayload())
   fillCampaignForm(campaign)
+  await refreshTemplatePreviewIfReady()
   await loadCampaigns()
   return campaign
 }
@@ -645,6 +675,7 @@ export async function saveCampaignTrackingLink(): Promise<void> {
   try {
     const campaign = await campaignsApi.updateTrackingLink(campaignId, campaignTrackingLinkPayload())
     fillCampaignForm(campaign)
+    await refreshTemplatePreviewIfReady()
     await loadCampaigns()
     campaignState().trackingLinkDialogOpen = false
     appState().notice = '短链接配置已保存'
@@ -656,17 +687,28 @@ export async function saveCampaignTrackingLink(): Promise<void> {
   }
 }
 
-export async function previewCampaignTemplate(): Promise<void> {
+interface PreviewCampaignTemplateOptions {
+  silentMissingCustomer?: boolean
+}
+
+export async function previewCampaignTemplate(options: PreviewCampaignTemplateOptions = {}): Promise<void> {
   if (!validateCampaignTemplateTrackingLink()) return
   if (!campaignState().selectedCampaign?.id) {
-    updateLocalTemplatePreview()
+    campaignState().templatePreviewError = '请先创建或选择活动'
+    appState().error = '请先创建或选择活动'
+    return
+  }
+  if (!campaignState().templatePreviewCustomerId) {
+    if (options.silentMissingCustomer) return
+    campaignState().templatePreviewError = '请选择一个客户后再渲染预览'
+    appState().error = '请选择一个客户后再渲染预览'
     return
   }
   const campaignId = campaignState().selectedCampaign.id
   campaignState().templatePreviewLoading = true
   campaignState().templatePreviewError = ''
   try {
-    const result = await campaignsApi.previewTemplate(campaignId, campaignTemplatePayload())
+    const result = await campaignsApi.previewTemplate(campaignId, campaignTemplatePayload(campaignState().templatePreviewCustomerId))
     campaignState().templatePreviewSubject = result.subjectPreview || ''
     campaignState().templatePreviewHtml = result.htmlPreview || ''
   } catch (error: unknown) {
@@ -725,6 +767,7 @@ export async function runCampaignAction(action: string, options: CampaignActionO
     const body = action === 'simulateSend' ? { customerIds: campaignState().selectedTestCustomerIds } : {}
     const campaign = await campaignsApi.action(campaignId, action as CampaignActionKey, body)
     fillCampaignForm(campaign)
+    await refreshTemplatePreviewIfReady()
     await loadCampaigns()
     if (action === 'simulateSend') {
       closeTestCustomerDialog()
@@ -809,6 +852,7 @@ export async function rollbackCampaignStep(step: CampaignStep | null | undefined
       targetStatus: step.status
     })
     fillCampaignForm(campaign)
+    await refreshTemplatePreviewIfReady()
     await loadCampaigns()
     appState().notice = `已回退到上一步：${campaignCurrentStatusLabel.value}`
   } catch (error: unknown) {

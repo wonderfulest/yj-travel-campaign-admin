@@ -3,7 +3,7 @@ import App from './App.vue'
 import router from './router'
 import { pinia } from './state/pinia'
 import { useAppStore } from './state/useAppStore'
-import { updateLocalTemplatePreview } from './state/useCampaignStore'
+import { resetTemplatePreview } from './state/useCampaignStore'
 import { setTokenProvider } from './api/request'
 import './assets/styles/global.css'
 
@@ -12,7 +12,7 @@ const appStore = useAppStore(pinia)
 
 setTokenProvider(() => appStore.token)
 
-updateLocalTemplatePreview()
+resetTemplatePreview()
 
 if (appStore.token) {
   appStore.normalizeActiveNavAccess()

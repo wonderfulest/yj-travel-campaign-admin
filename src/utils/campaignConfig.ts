@@ -5,7 +5,7 @@ export const REQUIRED_TRACKING_LINK_MESSAGE = 'HTML 模板必须包含短链参�
 export const DEFAULT_TEMPLATE_VARIABLES = [
   { key: REQUIRED_TRACKING_LINK_PARAM, label: '短链', sampleValue: 'https://s.example.com/china-trip-demo', required: true }
 ]
-export const EMPTY_TEMPLATE_PREVIEW_HTML = '<!doctype html><html><body style="font-family:Arial,sans-serif;color:#667;margin:24px;">暂无可预览的邮件模板</body></html>'
+export const EMPTY_TEMPLATE_PREVIEW_HTML = '<!doctype html><html><body style="font-family:Arial,sans-serif;color:#667;margin:24px;">请选择预览客户并点击渲染预览</body></html>'
 
 export const CAMPAIGN_LIFECYCLE_STEPS = [
   { status: 'DRAFT', label: '配置草稿', hint: '模板、通道、客群' },
