@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 
 import { renderTemplatePreview, scanTemplateVariableKeys, syncTemplateVariables } from '../src/utils/templateVariables.ts'
 
@@ -62,17 +62,23 @@ assert.equal(
   'variable config entries absent from subject and HTML must be removed'
 )
 
-const defaultTemplate = readFileSync(new URL('../src/assets/templates/pioneer-china-email.html', import.meta.url), 'utf8')
+const templateDirectory = new URL('../src/assets/templates/', import.meta.url)
+const templateFiles = readdirSync(templateDirectory).filter((file) => file.endsWith('.html'))
 
-assert(
-  scanTemplateVariableKeys(defaultTemplate).includes('trackingLink'),
-  'default email HTML template must include the trackingLink short-link parameter'
-)
+for (const templateFile of templateFiles) {
+  const template = readFileSync(new URL(templateFile, templateDirectory), 'utf8')
+  const keys = scanTemplateVariableKeys(template)
 
-assert(
-  scanTemplateVariableKeys(defaultTemplate).includes('unsubscribeLink'),
-  'default email HTML template must include the unsubscribeLink parameter'
-)
+  assert(
+    keys.includes('trackingLink'),
+    `${templateFile} must include the trackingLink short-link parameter`
+  )
+
+  assert(
+    keys.includes('unsubscribeLink'),
+    `${templateFile} must include the unsubscribeLink parameter`
+  )
+}
 
 const renderedPreview = renderTemplatePreview({
   subject: 'Special offer for ${customerName}',
