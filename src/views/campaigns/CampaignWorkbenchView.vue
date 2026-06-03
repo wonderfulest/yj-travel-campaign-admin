@@ -255,10 +255,10 @@
           }}
         </button>
         <div
-          v-if="templateMissingTrackingLinkParam"
+          v-if="templateRequiredParamMessage"
           class="message error template-param-error"
         >
-          {{ requiredTrackingLinkMessage }}
+          {{ templateRequiredParamMessage }}
         </div>
         <dl class="tracking-link-summary">
           <div class="tracking-link-field">
@@ -307,6 +307,9 @@
             <strong>可插入变量</strong>
             <span>点击插入到 HTML 光标位置</span>
           </div>
+        </div>
+        <div class="message info template-param-help">
+          退订按钮请使用 href="${unsubscribeLink}"。退订页面从 URL 读取 token，退订时 POST /api/subscriptions/unsubscribe，恢复订阅时 POST /api/subscriptions/subscribe，请求体均为 {"token":"..."}。
         </div>
         <div class="variable-chip-list">
           <button
@@ -368,12 +371,11 @@ import {
   previewCampaignTemplate,
   refreshTemplatePreviewIfReady,
   removeCampaignSegment,
-  REQUIRED_TRACKING_LINK_MESSAGE as requiredTrackingLinkMessage,
   rollbackCampaignStep,
   saveCampaignSetup,
   selectedCampaignSegments,
   syncCampaignTemplateVariables,
-  templateMissingTrackingLinkParam,
+  templateRequiredParamMessage,
   trackingShortUrl as buildTrackingShortUrl,
   trackingFinalUrl as buildTrackingFinalUrl,
   toggleCampaignSegment,

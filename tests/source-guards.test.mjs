@@ -15,6 +15,7 @@ function readSourceFiles(directoryUrl) {
 const source = readSourceFiles(new URL('../src/', import.meta.url)).join('\n')
 const settingsViewSource = readFileSync(new URL('../src/views/settings/SettingsView.vue', import.meta.url), 'utf8')
 const defaultCampaignFormSource = source.match(/function defaultCampaignForm\(\)[\s\S]*?\n\}/)?.[0] || ''
+const saveCampaignDraftForAdvanceSource = source.match(/async function saveCampaignDraftForAdvance\([^)]*\)[\s\S]*?\n\}/)?.[0] || ''
 
 assert(
   !/setActivePinia\(createPinia\(\)\)/.test(source) &&
@@ -341,7 +342,7 @@ assert(
 assert(
     /function isCampaignAdvanceDisabled\(\)[\s\S]*if \(.*selectedCampaign\?\.id\) return false[\s\S]*campaignNextAction\.value !== 'saveDraft'/.test(source) &&
     /async function saveCampaignDraftForAdvance\([^)]*\)[^{]*\{[\s\S]*campaignsApi\.create\([\s\S]*campaignsApi\.updateTemplate\([\s\S]*fillCampaignForm\(campaign\)/.test(source) &&
-    !/async function saveCampaignDraftForAdvance\([^)]*\)[^{]*\{[\s\S]*campaignsApi\.(updateChannel|updateSegments|updateTrackingLink)\([\s\S]*return campaign/.test(source) &&
+    !/campaignsApi\.(updateChannel|updateSegments|updateTrackingLink)\(/.test(saveCampaignDraftForAdvanceSource) &&
     /advanceCampaignStep\([^)]*\)[\s\S]*campaignNextAction\.value !== 'saveDraft'[\s\S]*const campaign = await saveCampaignDraftForAdvance\(\)/.test(source) &&
     !/advanceCampaignStep\([^)]*\)[\s\S]*\/advance`/.test(source),
   'mail campaign lifecycle advance must keep the draft-step button clickable, persist the draft template first, and never call the generic advance endpoint'
@@ -417,16 +418,21 @@ assert(
 
 assert(
     /REQUIRED_TRACKING_LINK_PARAM = 'trackingLink'/.test(source) &&
+    /REQUIRED_UNSUBSCRIBE_LINK_PARAM = 'unsubscribeLink'/.test(source) &&
     /REQUIRED_TRACKING_LINK_MESSAGE = 'HTML 模板必须包含短链参数 \$\{trackingLink\}'/.test(source) &&
-    /function validateCampaignTemplateTrackingLink\(\)[\s\S]*templatePreviewError = REQUIRED_TRACKING_LINK_MESSAGE/.test(source) &&
-    /<h3>短链与变量配置<\/h3>[\s\S]*tracking-link-dock[\s\S]*v-if="templateMissingTrackingLinkParam"[\s\S]*requiredTrackingLinkMessage/.test(source) &&
+    /REQUIRED_UNSUBSCRIBE_LINK_MESSAGE = 'HTML 模板必须包含退订链接变量 \$\{unsubscribeLink\}'/.test(source) &&
+    /function validateCampaignTemplateTrackingLink\(\)[\s\S]*templatePreviewError = message/.test(source) &&
+    /<h3>短链与变量配置<\/h3>[\s\S]*tracking-link-dock[\s\S]*v-if="templateRequiredParamMessage"[\s\S]*templateRequiredParamMessage/.test(source) &&
     /syncTemplateVariables\([^)]*\)[\s\S]*scanTemplateVariableKeys\(`\$\{subject \|\| ''\}\\n\$\{htmlBody \|\| ''\}`\)\.map/.test(source) &&
     /key === REQUIRED_TRACKING_LINK_PARAM[\s\S]*TRACKING_LINK_VARIABLE/.test(source) &&
+    /key === REQUIRED_UNSUBSCRIBE_LINK_PARAM[\s\S]*UNSUBSCRIBE_LINK_VARIABLE/.test(source) &&
     /template-variable-catalog/.test(source) &&
+    /POST \/api\/subscriptions\/unsubscribe/.test(source) &&
+    /POST \/api\/subscriptions\/subscribe/.test(source) &&
     /v-for="option in state\.templateVariableOptions"/.test(source) &&
     /@click="insertTemplateVariable\(option\)"/.test(source) &&
-    !/<textarea[\s\S]*id="campaign-html-editor"[\s\S]*<\/textarea>\s*<div v-if="templateMissingTrackingLinkParam"/.test(source),
-  'mail campaign variable config panel must require trackingLink and expose insertable template variables in the right panel'
+    !/<textarea[\s\S]*id="campaign-html-editor"[\s\S]*<\/textarea>\s*<div v-if="templateRequiredParamMessage"/.test(source),
+  'mail campaign variable config panel must require trackingLink and unsubscribeLink and expose insertable template variables in the right panel'
 )
 
 assert(

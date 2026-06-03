@@ -164,7 +164,17 @@
                       <span class="tracking-strong-text" :title="event.clickedAt">{{ compactDateTime(event.clickedAt) }}</span>
                     </td>
                     <td>
-                      <span class="tracking-code-chip" :title="event.campaignId">{{ compactId(event.campaignId) }}</span>
+                      <button
+                        v-if="event.campaignId"
+                        class="tracking-campaign-link"
+                        type="button"
+                        :title="`${trackingCampaignName(event)} / ${event.campaignId}`"
+                        @click="openTrackingCampaignDetail(event)"
+                      >
+                        <span>{{ trackingCampaignName(event) }}</span>
+                        <small>{{ compactId(event.campaignId) }}</small>
+                      </button>
+                      <span v-else>-</span>
                     </td>
                     <td>
                       <div class="tracking-tag-list utm-tag-cell">
@@ -280,9 +290,10 @@ import {
   useTrackingStore
 } from '../../state/useTrackingStore'
 import { openCustomerDetail } from '../../state/useCustomerStore'
+import { openCampaignDetail } from '../../state/useUiStore'
 import { formatWebsiteLabel, normalizedWebsiteUrl, percentValue, statusLabel } from '../../utils/format'
 import CustomerAssetDialog from '../../components/customers/CustomerAssetDialog.vue'
-import type { Customer, TrackingEvent } from '../../types'
+import type { Campaign, Customer, TrackingEvent } from '../../types'
 
 const appStore = useAppStore()
 const campaignStore = useCampaignStore()
@@ -321,6 +332,16 @@ function compactId(value: string | number | undefined | null): string {
   if (!text) return '-'
   if (text.length <= 14) return text
   return `${text.slice(0, 6)}…${text.slice(-4)}`
+}
+
+function campaignForEvent(event: TrackingEvent): Campaign | null {
+  const campaignId = String(event.campaignId || '')
+  if (!campaignId) return null
+  return state.campaigns.find((campaign) => String(campaign.id) === campaignId) || null
+}
+
+function trackingCampaignName(event: TrackingEvent): string {
+  return campaignForEvent(event)?.name || '未命名活动'
 }
 
 function compactDateTime(value: string | undefined): string {
@@ -413,6 +434,17 @@ function trackingEventCustomer(event: TrackingEvent): Customer {
 
 function openTrackingCustomerDetail(event: TrackingEvent): void {
   void openCustomerDetail(trackingEventCustomer(event))
+}
+
+function openTrackingCampaignDetail(event: TrackingEvent): void {
+  const campaignId = String(event.campaignId || '')
+  if (!campaignId) return
+  openCampaignDetail(campaignForEvent(event) || {
+    id: campaignId,
+    name: trackingCampaignName(event),
+    objective: '',
+    status: 'DRAFT'
+  })
 }
 
 onMounted(() => {

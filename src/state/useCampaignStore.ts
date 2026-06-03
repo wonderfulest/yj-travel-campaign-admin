@@ -13,6 +13,8 @@ import {
   DEFAULT_TEMPLATE_VARIABLES,
   REQUIRED_TRACKING_LINK_MESSAGE,
   REQUIRED_TRACKING_LINK_PARAM,
+  REQUIRED_UNSUBSCRIBE_LINK_MESSAGE,
+  REQUIRED_UNSUBSCRIBE_LINK_PARAM,
   campaignActionLabel,
   campaignLifecycleIndex,
   defaultCampaignForm,
@@ -38,6 +40,8 @@ export {
   EMPTY_TEMPLATE_PREVIEW_HTML,
   REQUIRED_TRACKING_LINK_MESSAGE,
   REQUIRED_TRACKING_LINK_PARAM,
+  REQUIRED_UNSUBSCRIBE_LINK_MESSAGE,
+  REQUIRED_UNSUBSCRIBE_LINK_PARAM,
   campaignActionLabel,
   campaignLifecycleIndex,
   defaultCampaignForm,
@@ -89,6 +93,13 @@ export const campaignNextAction = computed(() => CAMPAIGN_NEXT_ACTION_BY_STATUS[
 export const campaignNextActionLabel = computed(() => campaignNextAction.value ? campaignActionLabel(campaignNextAction.value) : '生命周期已完成')
 export const campaignAdvanceButtonLabel = computed(() => campaignNextAction.value ? '确认' : '生命周期已完成')
 export const templateMissingTrackingLinkParam = computed(() => !campaignHtmlHasTrackingLinkParam())
+export const templateMissingUnsubscribeLinkParam = computed(() => !campaignHtmlHasUnsubscribeLinkParam())
+export const templateRequiredParamMessage = computed(() => {
+  const messages = []
+  if (templateMissingTrackingLinkParam.value) messages.push(REQUIRED_TRACKING_LINK_MESSAGE)
+  if (templateMissingUnsubscribeLinkParam.value) messages.push(REQUIRED_UNSUBSCRIBE_LINK_MESSAGE)
+  return messages.join('；')
+})
 
 export const editableTemplateVariableRows = computed(() =>
   campaignState().campaignForm.templateVariables
@@ -132,10 +143,11 @@ export const campaignLifecycleView = computed(() => {
 export function campaignPrePushBlockReason() {
   if (!campaignState().selectedCampaign?.id) return '请先创建或选择活动'
   if (!campaignState().selectedCampaign.template) return '请先保存活动配置以写入邮件模板'
-  if (templateMissingTrackingLinkParam.value) return REQUIRED_TRACKING_LINK_MESSAGE
+  if (templateRequiredParamMessage.value) return templateRequiredParamMessage.value
   if (campaignSetupDirty.value) return '当前模板、通道或客群有未保存修改，请先保存活动配置'
   if (!campaignState().selectedCampaign.trackingLink) return '请先保存活动短链接配置'
   if (campaignTrackingLinkDirty.value) return '当前短链接配置有未保存修改，请先保存短链接配置'
+  if (templateRequiredParamMessage.value) return templateRequiredParamMessage.value
   if (!campaignState().selectedCampaign.channelId) {
     return campaignState().campaignForm.channelId ? '请先保存活动配置以绑定推送通道' : '请先选择并保存推送通道'
   }
@@ -366,13 +378,20 @@ export function campaignHtmlHasTrackingLinkParam(): boolean {
   return scanTemplateVariableKeys(html).includes(REQUIRED_TRACKING_LINK_PARAM)
 }
 
+export function campaignHtmlHasUnsubscribeLinkParam(): boolean {
+  const html = campaignState().campaignForm.htmlBody
+  if (!html) return true
+  return scanTemplateVariableKeys(html).includes(REQUIRED_UNSUBSCRIBE_LINK_PARAM)
+}
+
 export function validateCampaignTemplateTrackingLink(): boolean {
   const html = campaignState().campaignForm.htmlBody
-  if (!html || campaignHtmlHasTrackingLinkParam()) return true
+  if (!html || (!templateMissingTrackingLinkParam.value && !templateMissingUnsubscribeLinkParam.value)) return true
+  const message = templateRequiredParamMessage.value
   campaignState().templatePreviewHtml = ''
   campaignState().templatePreviewSubject = ''
-  campaignState().templatePreviewError = REQUIRED_TRACKING_LINK_MESSAGE
-  appState().error = REQUIRED_TRACKING_LINK_MESSAGE
+  campaignState().templatePreviewError = message
+  appState().error = message
   return false
 }
 

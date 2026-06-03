@@ -2,10 +2,17 @@ import type { TemplateVariable } from '../types'
 
 const TEMPLATE_VARIABLE_PATTERN = /\$\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}/g
 const REQUIRED_TRACKING_LINK_PARAM = 'trackingLink'
+const REQUIRED_UNSUBSCRIBE_LINK_PARAM = 'unsubscribeLink'
 const TRACKING_LINK_VARIABLE: TemplateVariable = {
   key: REQUIRED_TRACKING_LINK_PARAM,
   label: '短链',
   sampleValue: 'https://s.example.com/china-trip-demo',
+  required: true
+}
+const UNSUBSCRIBE_LINK_VARIABLE: TemplateVariable = {
+  key: REQUIRED_UNSUBSCRIBE_LINK_PARAM,
+  label: '退订链接',
+  sampleValue: 'https://example.com/unsubscribe?token=rt_abc',
   required: true
 }
 
@@ -82,6 +89,13 @@ export function syncTemplateVariables({
         ...TRACKING_LINK_VARIABLE,
         label: existing?.label || TRACKING_LINK_VARIABLE.label,
         sampleValue: existing?.sampleValue || TRACKING_LINK_VARIABLE.sampleValue
+      }
+    }
+    if (key === REQUIRED_UNSUBSCRIBE_LINK_PARAM) {
+      return {
+        ...UNSUBSCRIBE_LINK_VARIABLE,
+        label: existing?.label || UNSUBSCRIBE_LINK_VARIABLE.label,
+        sampleValue: existing?.sampleValue || UNSUBSCRIBE_LINK_VARIABLE.sampleValue
       }
     }
     return {

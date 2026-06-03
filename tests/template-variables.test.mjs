@@ -12,13 +12,13 @@ const existingVariables = [
 
 const synced = syncTemplateVariables({
   subject: 'Special offer for ${customerName} from ${travelAdvisor}',
-  htmlBody: '<p>Hello ${customerName}, book with ${companyName} and ${destinationName}</p><a href="${trackingLink}">View</a>',
+  htmlBody: '<p>Hello ${customerName}, book with ${companyName} and ${destinationName}</p><a href="${trackingLink}">View</a><a href="${unsubscribeLink}">Unsubscribe</a>',
   variables: existingVariables
 })
 
 assert.deepEqual(
   synced.map((variable) => variable.key),
-  ['customerName', 'travelAdvisor', 'companyName', 'destinationName', 'trackingLink'],
+  ['customerName', 'travelAdvisor', 'companyName', 'destinationName', 'trackingLink', 'unsubscribeLink'],
   'template variables must include all placeholders from the subject and HTML'
 )
 
@@ -26,6 +26,12 @@ assert.equal(
   synced.find((variable) => variable.key === 'trackingLink').label,
   '短链',
   'trackingLink must use the short-link variable label'
+)
+
+assert.equal(
+  synced.find((variable) => variable.key === 'unsubscribeLink').label,
+  '退订链接',
+  'unsubscribeLink must use the unsubscribe variable label'
 )
 
 assert.deepEqual(
@@ -63,12 +69,18 @@ assert(
   'default email HTML template must include the trackingLink short-link parameter'
 )
 
+assert(
+  scanTemplateVariableKeys(defaultTemplate).includes('unsubscribeLink'),
+  'default email HTML template must include the unsubscribeLink parameter'
+)
+
 const renderedPreview = renderTemplatePreview({
   subject: 'Special offer for ${customerName}',
-  htmlBody: '<p>Hello ${customerName}, book with ${companyName}</p><a href="${trackingLink}">View</a>',
+  htmlBody: '<p>Hello ${customerName}, book with ${companyName}</p><a href="${trackingLink}">View</a><a href="${unsubscribeLink}">Unsubscribe</a>',
   variables: synced,
   runtimeVariables: {
-    trackingLink: 'https://go.example.com/uk-agency-202605'
+    trackingLink: 'https://go.example.com/uk-agency-202605',
+    unsubscribeLink: 'https://tengxuan.com/unsubscribe?token=rt_abc'
   }
 })
 
@@ -80,6 +92,6 @@ assert.equal(
 
 assert.equal(
   renderedPreview.htmlPreview,
-  '<p>Hello Reisen Scala, book with Youjie Tech</p><a href="https://go.example.com/uk-agency-202605">View</a>',
-  'local template preview must render configured variables and trackingLink from the saved short-link configuration'
+  '<p>Hello Reisen Scala, book with Youjie Tech</p><a href="https://go.example.com/uk-agency-202605">View</a><a href="https://tengxuan.com/unsubscribe?token=rt_abc">Unsubscribe</a>',
+  'local template preview must render configured variables, trackingLink, and unsubscribeLink'
 )

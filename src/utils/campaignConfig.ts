@@ -1,9 +1,12 @@
 import type { CampaignForm, CampaignStatus, TrackingLink } from '../types'
 
 export const REQUIRED_TRACKING_LINK_PARAM = 'trackingLink'
+export const REQUIRED_UNSUBSCRIBE_LINK_PARAM = 'unsubscribeLink'
 export const REQUIRED_TRACKING_LINK_MESSAGE = 'HTML 模板必须包含短链参数 ${trackingLink}'
+export const REQUIRED_UNSUBSCRIBE_LINK_MESSAGE = 'HTML 模板必须包含退订链接变量 ${unsubscribeLink}'
 export const DEFAULT_TEMPLATE_VARIABLES = [
-  { key: REQUIRED_TRACKING_LINK_PARAM, label: '短链', sampleValue: 'https://s.example.com/china-trip-demo', required: true }
+  { key: REQUIRED_TRACKING_LINK_PARAM, label: '短链', sampleValue: 'https://s.example.com/china-trip-demo', required: true },
+  { key: REQUIRED_UNSUBSCRIBE_LINK_PARAM, label: '退订链接', sampleValue: 'https://example.com/unsubscribe?token=rt_abc', required: true }
 ]
 export const EMPTY_TEMPLATE_PREVIEW_HTML = '<!doctype html><html><body style="font-family:Arial,sans-serif;color:#667;margin:24px;">请选择预览客户并点击渲染预览</body></html>'
 

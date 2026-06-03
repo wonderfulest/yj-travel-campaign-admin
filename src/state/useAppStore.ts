@@ -44,6 +44,7 @@ export const useAppStore = defineStore('app', {
     } as AuthForm,
     activeNav: initialAdminNav(),
     sidebarCollapsed: localStorage.getItem('travel_admin_sidebar_collapsed') === 'true',
+    routeHistory: [] as Array<{ fullPath: string; label: string }>,
     loading: false,
     error: '',
     notice: '',
@@ -126,6 +127,18 @@ export const useAppStore = defineStore('app', {
       this.activeNav = nav
       this.customerTool = normalizeCustomerTool(customerTool)
       this.persistNavigationState()
+    },
+    rememberRoute(pathname: string, fullPath: string, queryNav = '') {
+      if (!this.isLoggedIn || pathname === '/login') return
+      const { nav } = resolveNavigationFromLocation(pathname, queryNav)
+      if (!canAccessNav(nav, this)) return
+      const navItem = navItems.find((item) => item.key === nav)
+      const label = navItem?.title || navItem?.label || nav
+      const nextItem = { fullPath, label }
+      this.routeHistory = [
+        ...this.routeHistory.filter((item) => item.fullPath !== fullPath),
+        nextItem
+      ].slice(-8)
     },
     persistSession(result: { accessToken: string; email: string; tenantId: string | number; userId: string | number; roles?: UserRole[] }) {
       this.token = result.accessToken

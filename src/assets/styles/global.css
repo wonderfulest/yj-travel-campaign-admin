@@ -222,6 +222,11 @@ select[multiple] {
   background: #e7f7ec;
 }
 
+.message.info {
+  color: #1f3a5f;
+  background: #eef5ff;
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 252px minmax(0, 1fr);
@@ -384,6 +389,30 @@ select[multiple] {
   margin: 7px 0 0;
   color: #657383;
   font-size: 14px;
+}
+
+.breadcrumb-trail {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 8px;
+  color: #71808f;
+}
+
+.breadcrumb-trail button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.breadcrumb-trail button.current {
+  color: #526170;
+  cursor: default;
 }
 
 .tenant-chip {
@@ -933,6 +962,44 @@ select[multiple] {
 .tracking-code-chip {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   letter-spacing: 0;
+}
+
+.tracking-campaign-link {
+  display: grid;
+  max-width: 100%;
+  gap: 2px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #0f766e;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tracking-campaign-link span,
+.tracking-campaign-link small {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tracking-campaign-link span {
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.tracking-campaign-link small {
+  color: #647382;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.tracking-campaign-link:hover span,
+.tracking-campaign-link:focus-visible span {
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .tracking-url-link {

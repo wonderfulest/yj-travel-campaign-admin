@@ -12,7 +12,8 @@ import type {
   MappingPreview,
   MappingResult,
   TenantApiSecretRotationResult,
-  TenantApiSecretStatus
+  TenantApiSecretStatus,
+  TenantSettings
 } from '../types'
 
 export const customersApi = {
@@ -76,6 +77,15 @@ export const customersApi = {
       method: 'POST',
       body: JSON.stringify({})
     }) as Promise<TenantApiSecretRotationResult>
+  },
+  getTenantSettings(): Promise<TenantSettings> {
+    return request('/api/tenant/settings') as Promise<TenantSettings>
+  },
+  updateTenantSettings(body: Pick<TenantSettings, 'unsubscribePageUrl'>): Promise<TenantSettings> {
+    return request('/api/tenant/settings', {
+      method: 'POST',
+      body: JSON.stringify(body)
+    }) as Promise<TenantSettings>
   },
   getMappingPreview(): Promise<MappingPreview> {
     return request('/api/customer-mapping/osm/preview') as Promise<MappingPreview>

@@ -116,6 +116,11 @@ export interface TenantApiSecretRotationResult {
   rotatedAt: string
 }
 
+export interface TenantSettings {
+  tenantId: string
+  unsubscribePageUrl?: string
+}
+
 export interface CustomerSearchIndexSyncResult {
   tenantId: string
   indexedAssets: number

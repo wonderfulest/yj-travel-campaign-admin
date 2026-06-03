@@ -45,6 +45,8 @@ watch(
     if (!isLoggedIn.value) return
     const queryNav = typeof route.query.nav === 'string' ? route.query.nav : ''
     appStore.syncNavigationFromRoute(route.path, queryNav)
-  }
+    appStore.rememberRoute(route.path, route.fullPath, queryNav)
+  },
+  { immediate: true }
 )
 </script>
