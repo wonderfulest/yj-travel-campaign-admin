@@ -320,6 +320,33 @@ export async function updateEmailQuality(customer: Customer, quality: EmailQuali
   }
 }
 
+export async function deleteCustomer(customer: Customer): Promise<void> {
+  if (!customer?.id) return
+  const label = customer.name || customer.email || customer.id
+  if (!window.confirm(`确认删除客户资产「${label}」？此操作会删除主表记录，并保留来源数据用于后续追溯或重新合并。`)) return
+  appState().loading = true
+  appState().error = ''
+  appState().notice = ''
+  try {
+    await customersApi.delete(customer.id)
+    if (customerState().selectedCustomer?.id === customer.id) {
+      closeCustomerDialog()
+    }
+    const currentPage = customerState().customerPage.page
+    const shouldGoPrevious = customerState().customers.length <= 1 && currentPage > 0
+    await Promise.allSettled([
+      loadCustomers(shouldGoPrevious ? currentPage - 1 : currentPage),
+      loadCustomerSummary()
+    ])
+    appState().notice = '客户资产已删除'
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    appState().error = `客户资产删除失败：${err.message || '请求处理失败'}`
+  } finally {
+    appState().loading = false
+  }
+}
+
 export function changeCustomerPage(nextPage: number): void {
   if (nextPage < 0 || (customerState().customerPage.totalPages && nextPage >= customerState().customerPage.totalPages)) return
   loadCustomers(nextPage)

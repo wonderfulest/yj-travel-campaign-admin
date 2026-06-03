@@ -103,3 +103,17 @@ export function jumpTrackingLinkPage(pageNumber: number | string): void {
   if (nextPage === null || nextPage === trackingState().trackingLinkPage.page) return
   loadTrackingAnalytics(trackingState().trackingEventPage.page, nextPage)
 }
+
+export function changeTrackingLinkPageSize(size: number | string): void {
+  const nextSize = Number(size)
+  if (!nextSize) return
+  trackingState().trackingLinkPage.size = nextSize
+  loadTrackingAnalytics(trackingState().trackingEventPage.page, 0)
+}
+
+export function changeTrackingEventPageSize(size: number | string): void {
+  const nextSize = Number(size)
+  if (!nextSize) return
+  trackingState().trackingEventPage.size = nextSize
+  loadTrackingAnalytics(0)
+}

@@ -1,4 +1,6 @@
 <template>
+    <AppMessageBox />
+
     <RouterView v-if="!isLoggedIn" />
 
     <main v-else class="app-shell" :class="{'sidebar-collapsed': sidebarCollapsed}">
@@ -6,9 +8,6 @@
 
       <section class="workspace">
         <AppTopbar />
-
-        <p v-if="notice" class="message success">{{ notice }}</p>
-        <p v-if="error" class="message error">{{ error }}</p>
 
         <RouterView />
 
@@ -26,6 +25,7 @@ import { useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import AppSidebar from './layout/AppSidebar.vue'
 import AppTopbar from './layout/AppTopbar.vue'
+import AppMessageBox from './components/common/AppMessageBox.vue'
 import CampaignDialogs from './views/campaigns/CampaignDialogs.vue'
 import CustomerHelpPanel from './components/common/CustomerHelpPanel.vue'
 import { useAppStore } from './state/useAppStore'
@@ -33,7 +33,7 @@ import { useCustomerStore } from './state/useCustomerStore'
 
 const appStore = useAppStore()
 const customerStore = useCustomerStore()
-const { sidebarCollapsed, notice, error } = storeToRefs(appStore)
+const { sidebarCollapsed } = storeToRefs(appStore)
 const { customerHelpVisible } = storeToRefs(customerStore)
 const isLoggedIn = computed(() => appStore.isLoggedIn)
 

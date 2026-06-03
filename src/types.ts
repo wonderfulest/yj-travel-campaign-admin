@@ -378,8 +378,9 @@ export interface TrackingSummary {
 }
 
 export interface TrackingTimeseriesPoint {
-  date: string
+  bucket: string
   clicks: number
+  customers: number
 }
 
 export interface TrackingUtmStat {

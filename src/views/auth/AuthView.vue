@@ -35,7 +35,6 @@
             {{ authMode === 'register' ? '注册并登录' : '登录后台' }}
           </button>
         </form>
-        <p v-if="error" class="message error">{{ error }}</p>
       </section>
     </main>
 </template>
@@ -45,7 +44,7 @@ import { KeyRound, Mail } from 'lucide-vue-next'
 import { useAppStore } from '../../state/useAppStore'
 
 const appStore = useAppStore()
-const { authMode, authForm, loading, error } = storeToRefs(appStore)
+const { authMode, authForm, loading } = storeToRefs(appStore)
 
 async function login(): Promise<void> {
   await appStore.login()

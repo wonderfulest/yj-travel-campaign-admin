@@ -71,11 +71,20 @@
                 {{ customer.country || "-" }} / {{ customer.city || "-" }}
               </td>
               <td>
-                <span class="status">{{
-                  customer.emailQuality || "PENDING"
-                }}</span>
+                <div class="status-stack" aria-label="客户状态">
+                  <span :class="['status', statusTone(customer.contactStatus)]">
+                    {{ statusLabel(customer.contactStatus || "NOT_CONTACTED") }}
+                  </span>
+                  <span :class="['status', statusTone(customer.emailQuality)]">
+                    {{ statusLabel(customer.emailQuality || "PENDING") }}
+                  </span>
+                </div>
               </td>
-              <td>{{ customer.sourcePrimary || "OSM" }}</td>
+              <td>
+                <span :class="['status', sourceTone(customer.sourcePrimary)]">
+                  {{ sourceLabel(customer.sourcePrimary) }}
+                </span>
+              </td>
               <td class="coord">
                 <MapPin :size="14" />
                 {{ customer.longitude || "-" }}, {{ customer.latitude || "-" }}
@@ -84,6 +93,7 @@
                 <button
                   class="row-action"
                   type="button"
+                  :disabled="state.loading"
                   @click="openCustomerDetail(customer)"
                 >
                   <Eye :size="14" />
@@ -92,10 +102,20 @@
                 <button
                   class="row-action"
                   type="button"
+                  :disabled="state.loading"
                   @click="openCustomerEdit(customer)"
                 >
                   <Pencil :size="14" />
                   编辑
+                </button>
+                <button
+                  class="row-action danger"
+                  type="button"
+                  :disabled="state.loading"
+                  @click="deleteCustomer(customer)"
+                >
+                  <Trash2 :size="14" />
+                  删除
                 </button>
               </td>
             </tr>
@@ -174,11 +194,13 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Trash2,
 } from "lucide-vue-next";
 import { useAppStore } from '../../state/useAppStore'
 import {
   changeCustomerPage,
   changeCustomerPageSize,
+  deleteCustomer,
   filteredCustomers,
   jumpCustomerPage,
   loadCustomers,
@@ -189,7 +211,7 @@ import {
   syncCustomerSearchIndex,
   useCustomerStore
 } from '../../state/useCustomerStore'
-import { formatWebsiteLabel, normalizedWebsiteUrl } from '../../utils/format'
+import { formatWebsiteLabel, normalizedWebsiteUrl, statusLabel } from '../../utils/format'
 import { PAGE_SIZE_OPTIONS as pageSizeOptions } from '../../utils/pagination'
 import CustomerAssetDialog from "../../components/customers/CustomerAssetDialog.vue";
 
@@ -203,4 +225,34 @@ const state = proxyRefs({
 onMounted(() => {
   void loadCustomers()
 })
+
+function statusTone(status: string | undefined): string {
+  const value = String(status || '').toUpperCase()
+  if (['VERIFIED', 'CONTACTED'].includes(value)) return 'success'
+  if (['READY_TO_VERIFY', 'PENDING', 'NOT_CONTACTED'].includes(value)) return 'warning'
+  if (['BOUNCED', 'INVALID', 'UNSUBSCRIBED', 'MISSING'].includes(value)) return 'danger'
+  return 'neutral'
+}
+
+function sourceTone(source: string | undefined): string {
+  const value = String(source || '').toUpperCase()
+  if (value === 'MANUAL') return 'success'
+  if (['JSON', 'EXCEL', 'API', 'CUSTOMER_JSON', 'CUSTOMER_EXCEL', 'CUSTOMER_API'].includes(value)) return 'info'
+  return 'neutral'
+}
+
+function sourceLabel(source: string | undefined): string {
+  const labels: Record<string, string> = {
+    OSM: '地图来源',
+    MANUAL: '手动录入',
+    JSON: 'JSON 导入',
+    EXCEL: 'Excel 导入',
+    API: '接口导入',
+    CUSTOMER_JSON: 'JSON 导入',
+    CUSTOMER_EXCEL: 'Excel 导入',
+    CUSTOMER_API: '接口导入'
+  }
+  const value = String(source || 'OSM').toUpperCase()
+  return labels[value] || value
+}
 </script>

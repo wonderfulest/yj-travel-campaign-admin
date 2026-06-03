@@ -57,6 +57,11 @@ export const customersApi = {
       body: JSON.stringify(body)
     }) as Promise<Customer>
   },
+  delete(id: string | number): Promise<void> {
+    return request(`/api/customers/${id}`, {
+      method: 'DELETE'
+    }) as Promise<void>
+  },
   updateEmailQuality(id: string | number, emailQuality: EmailQuality): Promise<Customer> {
     return request(`/api/customers/${id}/email-quality`, {
       method: 'PATCH',
