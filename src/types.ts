@@ -222,7 +222,7 @@ export interface Channel {
 export interface SmtpForm {
   name: string
   smtpHost: string
-  smtpPort: number
+  smtpPort: number | ''
   smtpEncryption: string
   smtpUsername: string
   smtpPassword: string

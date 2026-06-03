@@ -42,11 +42,15 @@
 import { storeToRefs } from 'pinia'
 import { KeyRound, Mail } from 'lucide-vue-next'
 import { useAppStore } from '../../state/useAppStore'
+import { replaceWithActiveNav } from '../../navigationActions'
 
 const appStore = useAppStore()
 const { authMode, authForm, loading } = storeToRefs(appStore)
 
 async function login(): Promise<void> {
-  await appStore.login()
+  await appStore.login(async () => {
+    appStore.activateNav('dashboard')
+    replaceWithActiveNav()
+  })
 }
 </script>

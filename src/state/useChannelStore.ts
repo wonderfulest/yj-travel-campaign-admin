@@ -6,25 +6,25 @@ import { boundedPage, normalizePageResult, pageQuery } from '../utils/pagination
 
 function defaultSmtpForm(): SmtpForm {
   return {
-    name: 'SMTP Gmail',
-    smtpHost: 'smtp.gmail.com',
-    smtpPort: 465,
-    smtpEncryption: 'SSL',
+    name: '',
+    smtpHost: '',
+    smtpPort: '',
+    smtpEncryption: '',
     smtpUsername: '',
     smtpPassword: '',
-    fromEmail: 'noreply@example.com',
-    fromName: 'Youjie Tech',
-    replyTo: 'reply@example.com'
+    fromEmail: '',
+    fromName: '',
+    replyTo: ''
   }
 }
 
 function defaultAwsSesForm(): AwsSesForm {
   return {
-    name: 'SES Frankfurt',
-    fromEmail: 'noreply@example.com',
-    fromName: 'Youjie Tech',
-    replyTo: 'reply@example.com',
-    awsRegion: 'eu-central-1',
+    name: '',
+    fromEmail: '',
+    fromName: '',
+    replyTo: '',
+    awsRegion: '',
     awsAccessKeyId: '',
     awsSecretAccessKey: ''
   }
@@ -82,11 +82,8 @@ export async function saveChannel(): Promise<void> {
     const wasEditing = Boolean(channelStore.editingChannelId)
     channelStore.editingChannelId = null
     channelStore.editingChannelType = null
-    if (isSmtp) {
-      channelStore.smtpForm.smtpPassword = ''
-    } else {
-      channelStore.awsSesForm.awsSecretAccessKey = ''
-    }
+    channelStore.smtpForm = defaultSmtpForm()
+    channelStore.awsSesForm = defaultAwsSesForm()
     appStore.notice = wasEditing ? '推送通道已更新' : '推送通道已保存'
   } catch (error: unknown) {
     const err = error as { message?: string }

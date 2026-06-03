@@ -89,6 +89,14 @@ assert(
 )
 
 assert(
+  /function defaultSmtpForm\(\)[\s\S]*name: ''[\s\S]*smtpHost: ''[\s\S]*smtpPort: ''[\s\S]*smtpEncryption: ''[\s\S]*fromEmail: ''[\s\S]*fromName: ''[\s\S]*replyTo: ''/.test(source) &&
+    /function defaultAwsSesForm\(\)[\s\S]*name: ''[\s\S]*fromEmail: ''[\s\S]*fromName: ''[\s\S]*replyTo: ''[\s\S]*awsRegion: ''[\s\S]*awsAccessKeyId: ''[\s\S]*awsSecretAccessKey: ''/.test(source) &&
+    !/name: 'SMTP Gmail'|smtp\.gmail\.com|fromEmail: 'noreply@example\.com'|name: 'SES Frankfurt'|awsRegion: 'eu-central-1'/.test(source) &&
+    /channelStore\.smtpForm = defaultSmtpForm\(\)[\s\S]*channelStore\.awsSesForm = defaultAwsSesForm\(\)/.test(source),
+  'new push channel forms must not be prefilled with sample SMTP or AWS SES values'
+)
+
+assert(
   /\/api\/customers\/summary\?topCountries=/.test(source),
   'dashboard customer totals must be loaded from /api/customers/summary'
 )
