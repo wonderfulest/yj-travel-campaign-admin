@@ -68,7 +68,7 @@
               </td>
               <td>{{ customer.email || "待补充" }}</td>
               <td>
-                {{ customer.country || "-" }} / {{ customer.city || "-" }}
+                {{ formatCountryDisplay(customer.country) }} / {{ customer.city || "-" }}
               </td>
               <td>
                 <div class="status-stack" aria-label="客户状态">
@@ -202,7 +202,9 @@ import {
   changeCustomerPageSize,
   deleteCustomer,
   filteredCustomers,
+  formatCountryDisplay,
   jumpCustomerPage,
+  loadDictionaryCountries,
   loadCustomers,
   openCustomerCreate,
   openCustomerDetail,
@@ -224,6 +226,7 @@ const state = proxyRefs({
 
 onMounted(() => {
   void loadCustomers()
+  void loadDictionaryCountries()
 })
 
 function statusTone(status: string | undefined): string {

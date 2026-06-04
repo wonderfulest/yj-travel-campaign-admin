@@ -89,6 +89,7 @@ import {
   loadDictionaryCountries,
   useCustomerStore
 } from '../../state/useCustomerStore'
+import { formatCountryNameWithCode } from '../../utils/format'
 
 interface LocationValue {
   country: string
@@ -212,13 +213,12 @@ function formatCountryLabel(country: BasicCountry): string {
 }
 
 function formatCountryPrimary(country: BasicCountry): string {
-  const parts = parseLocalizedNameParts(country.name)
-  return parts.en || parts.zh || country.id
+  return formatCountryNameWithCode(country.id, [country])
 }
 
 function formatCountrySecondary(country: BasicCountry): string {
   const parts = parseLocalizedNameParts(country.name)
-  return parts.zh || ''
+  return parts.en && parts.en !== parts.zh ? parts.en : ''
 }
 
 function formatCityLabel(city: BasicCity): string {

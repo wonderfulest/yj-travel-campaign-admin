@@ -57,6 +57,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { X } from 'lucide-vue-next'
 import { loadDictionaryCountries, useCustomerStore } from '../../state/useCustomerStore'
+import { formatCountryNameWithCode } from '../../utils/format'
 
 interface CountryValue {
   id: string
@@ -137,14 +138,13 @@ function parseLocalizedNameParts(nameValue: string | LocalizedNameValue) {
 }
 
 function formatPrimary(country: CountryValue) {
-  const parts = parseLocalizedNameParts(country.name)
-  return parts.en || parts.zh || country.id
+  return formatCountryNameWithCode(country.id, [country])
 }
 
 function formatSecondary(country: CountryValue) {
   const parts = parseLocalizedNameParts(country.name)
-  if (parts.zh && parts.en && parts.zh !== parts.en) return parts.zh
-  return parts.zh && parts.zh !== country.id ? parts.zh : ''
+  if (parts.en && parts.en !== parts.zh) return parts.en
+  return ''
 }
 
 function buildSearchText(country: CountryValue) {

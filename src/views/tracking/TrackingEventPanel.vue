@@ -163,12 +163,13 @@
 </template>
 <script setup lang="ts">
 import { Eye } from 'lucide-vue-next'
+import { onMounted } from 'vue'
 import {
   changeTrackingEventPage,
   changeTrackingEventPageSize,
   jumpTrackingEventPage
 } from '../../state/useTrackingStore'
-import { openCustomerDetail } from '../../state/useCustomerStore'
+import { formatCountryDisplay, loadDictionaryCountries, openCustomerDetail } from '../../state/useCustomerStore'
 import { openCampaignDetail } from '../../state/useUiStore'
 import { formatWebsiteLabel, normalizedWebsiteUrl, statusLabel } from '../../utils/format'
 import { PAGE_SIZE_OPTIONS as pageSizeOptions } from '../../utils/pagination'
@@ -186,6 +187,10 @@ const props = defineProps<{
     hasPrevious: boolean
   }
 }>()
+
+onMounted(() => {
+  void loadDictionaryCountries()
+})
 
 function compactText(value: string | number | undefined | null, maxLength = 28): string {
   const text = String(value || '').trim()
@@ -255,16 +260,17 @@ function utmTags(event: TrackingEvent): Array<{ label: string; value: string; fu
 function customerLocation(event: TrackingEvent): string {
   const customer = event.customer
   if (!customer) return '-'
-  return [customer.country, customer.region, customer.city, customer.postcode, customer.street, customer.houseNumber]
+  return [formatCountryDisplay(customer.country), customer.region, customer.city, customer.postcode, customer.street, customer.houseNumber]
+    .filter((item) => item !== '-')
     .filter(Boolean)
     .join(' / ') || '-'
 }
 
 function locationTags(event: TrackingEvent): string[] {
   const customer = event.customer
-  const tags = [customer?.country, customer?.region, customer?.city]
+  const tags = [formatCountryDisplay(customer?.country), customer?.region, customer?.city]
     .map((item) => String(item || '').trim())
-    .filter(Boolean)
+    .filter((item) => item && item !== '-')
     .slice(0, 3)
   return tags.length ? tags : ['-']
 }

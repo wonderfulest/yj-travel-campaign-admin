@@ -103,7 +103,7 @@
                 <span v-else>{{ member.phone || '-' }}</span>
               </td>
               <td>{{ member.email || "待补充" }}</td>
-              <td>{{ member.country || '-' }} / {{ member.city || '-' }}</td>
+              <td>{{ formatCountryDisplay(member.country) }} / {{ member.city || '-' }}</td>
               <td><span class="status">{{ member.emailQuality || 'PENDING' }}</span></td>
               <td>{{ member.sourcePrimary || "OSM" }}</td>
               <td class="coord">
@@ -230,6 +230,8 @@ import { storeToRefs } from 'pinia'
 import { Eye, MapPin, Pencil, RefreshCw } from 'lucide-vue-next'
 import { canAccessNav as canAccessAppNav, useAppStore } from '../../state/useAppStore'
 import {
+  formatCountryDisplay,
+  loadDictionaryCountries,
   openCustomerDetail,
   openCustomerEdit
 } from '../../state/useCustomerStore'
@@ -275,6 +277,7 @@ function canAccessNav(nav: string): boolean {
 
 onMounted(() => {
   void loadSegments()
+  void loadDictionaryCountries()
 })
 
 const segmentEditorOpen = ref(false)

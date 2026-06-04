@@ -45,7 +45,7 @@
                     </td>
                     <td>{{ item.name || '未命名客户' }}</td>
                     <td>{{ item.email || '待补充' }}</td>
-                    <td>{{ item.country || '-' }} / {{ item.city || '-' }}</td>
+                    <td>{{ formatCountryDisplay(item.country) }} / {{ item.city || '-' }}</td>
                     <td><span class="status">{{ item.action }}</span></td>
                     <td>{{ item.reason }}</td>
                   </tr>
@@ -79,7 +79,7 @@ import { proxyRefs, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { GitMerge } from 'lucide-vue-next'
 import { useAppStore } from '../../state/useAppStore'
-import { loadMappingPreview, runOsmMapping, useCustomerStore } from '../../state/useCustomerStore'
+import { formatCountryDisplay, loadDictionaryCountries, loadMappingPreview, runOsmMapping, useCustomerStore } from '../../state/useCustomerStore'
 
 const appStore = useAppStore()
 const customerStore = useCustomerStore()
@@ -90,5 +90,6 @@ const state = proxyRefs({
 
 onMounted(() => {
   void loadMappingPreview()
+  void loadDictionaryCountries()
 })
 </script>

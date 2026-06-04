@@ -18,6 +18,7 @@ import { customersApi } from '../api/customers'
 import { useAppStore } from './useAppStore'
 import { API_BASE } from '../api/client'
 import { boundedPage, emptyPageResult, normalizePageResult, pageQuery } from '../utils/pagination'
+import { formatCountryNameWithCode } from '../utils/format'
 import {
   buildCustomerEditForm as buildCustomerEditFormValue,
   CUSTOMER_API_IMPORT_PATH,
@@ -93,6 +94,10 @@ export function formatCountryShare(customers: number): string {
   const total = Number((customerState().customerSummary || summarizeCustomers(customerState().customers)).totalCustomers || 0)
   if (!total) return '0%'
   return `${Math.round((Number(customers || 0) / total) * 100)}%`
+}
+
+export function formatCountryDisplay(value: unknown): string {
+  return formatCountryNameWithCode(value, customerState().dictionary.countries)
 }
 
 export function replaceCustomer(updatedCustomer: Customer): void {

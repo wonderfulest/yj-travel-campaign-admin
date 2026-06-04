@@ -114,7 +114,7 @@
               </div>
               <div>
                 <dt>国家 / 城市</dt>
-                <dd>{{ displayValue(profileAsset().country) }} / {{ displayValue(profileAsset().city) }}</dd>
+                <dd>{{ formatCountryDisplay(profileAsset().country) }} / {{ displayValue(profileAsset().city) }}</dd>
               </div>
               <div>
                 <dt>地址</dt>
@@ -282,7 +282,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, proxyRefs } from "vue";
+import { computed, onMounted, proxyRefs } from "vue";
 import { storeToRefs } from 'pinia'
 import { X } from "lucide-vue-next";
 import type { ContactStatus, Customer, EmailQuality } from '../../types'
@@ -290,6 +290,8 @@ import { useAppStore } from '../../state/useAppStore'
 import {
   closeCustomerDialog,
   EMAIL_QUALITY_OPTIONS as emailQualityOptions,
+  formatCountryDisplay,
+  loadDictionaryCountries,
   profileAsset,
   saveCustomerEdit,
   updateEmailQuality,
@@ -317,6 +319,10 @@ const emit = defineEmits<{
 }>()
 
 const customerReadOnly = computed(() => !state.customerCreateMode && !state.customerEditMode)
+
+onMounted(() => {
+  void loadDictionaryCountries()
+})
 
 const contactStatusOptions: ContactStatus[] = [
   'NOT_CONTACTED',
@@ -354,8 +360,9 @@ const sourceItems = computed(() => {
     const sourceType = textValue(record.sourceType) || textValue(record.sourcePrimary) || 'OSM'
     const sourceObjectId = textValue(record.sourceObjectId)
     const title = textValue(record.name) || textValue(record.sourceObjectType) || sourceObjectId || `来源 ${index + 1}`
-    const address = [record.addrCountry, record.addrCity, record.addrStreet, record.addrHouseNumber]
+    const address = [formatCountryDisplay(record.addrCountry), record.addrCity, record.addrStreet, record.addrHouseNumber]
       .map(textValue)
+      .filter((item) => item !== '-')
       .filter(Boolean)
       .join(' / ')
     return {
@@ -474,7 +481,7 @@ function countryLabel(value: unknown): string {
   const id = textValue(country.id || country.alpha3)
   const name = textValue(country.name)
   if (!id && !name) return '-'
-  return [id, name].filter(Boolean).join(' ')
+  return id ? formatCountryDisplay(id) : name
 }
 
 function splitTags(value: string): string[] {

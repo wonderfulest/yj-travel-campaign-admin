@@ -49,7 +49,24 @@ export function jsonObject(value: unknown): unknown {
 export function localizedName(value: unknown): string {
   const parsed = jsonObject(value) as Record<string, string> | null
   if (!parsed) return displayValue(value) as string
-  return parsed.zh || parsed['zh-CN'] || parsed.en || Object.values(parsed).find(Boolean) || '-'
+  return parsed.zh || parsed['zh-CN'] || parsed.zh_cn || parsed.en || parsed.en_us || Object.values(parsed).find(Boolean) || '-'
+}
+
+export function formatCountryNameWithCode(
+  value: unknown,
+  countries: Array<{ id: string; alpha3?: string; name: unknown }> = []
+): string {
+  const code = String(value || '').trim()
+  if (!code) return '-'
+  const upperCode = code.toUpperCase()
+  const country = countries.find((item) => {
+    return String(item.id || '').toUpperCase() === upperCode || String(item.alpha3 || '').toUpperCase() === upperCode
+  })
+  if (!country) return code
+  const countryCode = String(country.id || code).trim()
+  const name = localizedName(country.name)
+  if (!name || name === '-' || name.toUpperCase() === countryCode.toUpperCase()) return countryCode
+  return `${name}(${countryCode})`
 }
 
 export function formatLanguages(languages: unknown[]): string {
@@ -66,8 +83,10 @@ interface Destination {
 
 export function destinationLabel(destination: Destination | null | undefined): string {
   if (!destination) return '-'
-  if (destination.country) return `${destination.country.id} ${localizedName(destination.country.name)}`
-  if (destination.city) return `${localizedName(destination.city.name)}${destination.city.country?.id ? ` / ${destination.city.country.id}` : ''}`
+  if (destination.country) return formatCountryNameWithCode(destination.country.id, [destination.country])
+  if (destination.city) {
+    return `${localizedName(destination.city.name)}${destination.city.country?.id ? ` / ${formatCountryNameWithCode(destination.city.country.id, [destination.city.country])}` : ''}`
+  }
   if (destination.worldRegion) return localizedName(destination.worldRegion.name)
   if (destination.iataAirport) return `${destination.iataAirport.id} ${localizedName(destination.iataAirport.name)}`
   return '-'

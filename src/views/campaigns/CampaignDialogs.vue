@@ -90,7 +90,7 @@
                 />
                 <span>
                   <strong>{{ item.name || item.email }}</strong>
-                  <small>{{ item.email }}<template v-if="item.country || item.city"> · {{ [item.country, item.city].filter(Boolean).join(' / ') }}</template></small>
+                  <small>{{ item.email }}<template v-if="item.country || item.city"> · {{ testCustomerLocation(item) }}</template></small>
                 </span>
               </label>
             </div>
@@ -132,7 +132,7 @@
         </div>
 </template>
 <script setup lang="ts">
-import { computed, proxyRefs } from 'vue'
+import { computed, onMounted, proxyRefs } from 'vue'
 import { storeToRefs } from 'pinia'
 import { CheckCircle2, Copy, Search, Send, X } from 'lucide-vue-next'
 import { useAppStore } from '../../state/useAppStore'
@@ -150,6 +150,7 @@ import {
   useCampaignStore
 } from '../../state/useCampaignStore'
 import { copyShortLink } from '../../state/useUiStore'
+import { formatCountryDisplay, loadDictionaryCountries } from '../../state/useCustomerStore'
 import type { Customer } from '../../types'
 
 const appStore = useAppStore()
@@ -172,5 +173,13 @@ const trackingFinalUrlText = computed(() => trackingFinalUrl({
   utmContent: state.campaignForm.trackingUtmContent,
   utmTerm: state.campaignForm.trackingUtmTerm
 }))
+
+onMounted(() => {
+  void loadDictionaryCountries()
+})
+
+function testCustomerLocation(customer: Customer): string {
+  return [formatCountryDisplay(customer.country), customer.city].filter((item) => item && item !== '-').join(' / ')
+}
 
 </script>

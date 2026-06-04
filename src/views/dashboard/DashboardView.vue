@@ -144,7 +144,7 @@
             type="button"
             @click="setActiveNav('customers')"
           >
-            <span class="country-stat-name">{{ item.country || '未填写' }}</span>
+            <span class="country-stat-name">{{ formatCountryDisplay(item.country) }}</span>
             <span class="country-stat-bar">
               <i :style="{ width: formatCountryShare(item.customers) }"></i>
             </span>
@@ -163,7 +163,9 @@ import { onMounted } from 'vue'
 import StatGrid from '../../components/common/StatGrid.vue'
 import {
   changeCustomerCountryTop,
+  formatCountryDisplay,
   formatCountryShare,
+  loadDictionaryCountries,
   useCustomerStore,
   loadCustomerSummary
 } from '../../state/useCustomerStore'
@@ -188,6 +190,7 @@ const countryTopOptions = [5, 10, 20, 50]
 
 onMounted(() => {
   void loadCustomerSummary()
+  void loadDictionaryCountries()
   void loadSegmentSummary()
 })
 </script>
