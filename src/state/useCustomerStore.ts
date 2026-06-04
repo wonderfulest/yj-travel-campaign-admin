@@ -62,6 +62,13 @@ export const useCustomerStore = defineStore('customer', {
     mappingPreview: null as MappingPreview | null,
     mappingResult: null as MappingResult | null,
     importFile: null as File | null,
+    importFiles: [] as File[],
+    importProgress: {
+      totalFiles: 0,
+      completedFiles: 0,
+      currentFileName: '',
+      percent: 0
+    },
     importResult: null as ImportResult | null,
     tenantApiSecretStatus: null as TenantApiSecretStatus | null,
     tenantApiSecretKey: '',
@@ -366,16 +373,21 @@ export function changeCustomerPageSize(size: number | string): void {
 }
 
 export async function importCustomerFile(importType: 'json' | 'excel', onSuccess?: () => void): Promise<void> {
-  if (!customerState().importFile) {
+  const selectedFiles = customerState().importFiles.length
+    ? customerState().importFiles
+    : customerState().importFile
+      ? [customerState().importFile]
+      : []
+
+  if (!selectedFiles.length) {
     appState().error = importType === 'excel' ? '请选择客户 Excel 文件' : '请选择客户 JSON 文件'
     return
   }
-  const fileName = customerState().importFile.name.toLowerCase()
-  if (importType === 'excel' && !fileName.endsWith('.xlsx')) {
+  if (importType === 'excel' && selectedFiles.some(file => !file.name.toLowerCase().endsWith('.xlsx'))) {
     appState().error = 'Excel 文件导入只支持 .xlsx 文件'
     return
   }
-  if (importType === 'json' && !fileName.endsWith('.json')) {
+  if (importType === 'json' && selectedFiles.some(file => !file.name.toLowerCase().endsWith('.json'))) {
     appState().error = 'JSON 导入只支持 .json 文件'
     return
   }
@@ -383,13 +395,61 @@ export async function importCustomerFile(importType: 'json' | 'excel', onSuccess
   appState().loading = true
   appState().error = ''
   appState().notice = ''
+  customerState().importProgress = {
+    totalFiles: selectedFiles.length,
+    completedFiles: 0,
+    currentFileName: selectedFiles[0]?.name || '',
+    percent: 0
+  }
   try {
-    const form = new FormData()
-    form.append('file', customerState().importFile)
-    customerState().importResult = await customersApi.importFile(importType, form)
+    const aggregate: ImportResult = {
+      importedCount: 0,
+      totalCount: 0,
+      successCount: 0,
+      duplicateCount: 0,
+      failedCount: 0,
+      errors: []
+    }
+    let failedFiles = 0
+
+    for (const file of selectedFiles) {
+      customerState().importProgress.currentFileName = file.name
+      const form = new FormData()
+      form.append('file', file)
+      try {
+        const result = await customersApi.importFile(importType, form)
+        aggregate.importedCount = Number(aggregate.importedCount || 0) + Number(result.importedCount || 0)
+        aggregate.totalCount = Number(aggregate.totalCount || 0) + Number(result.totalCount || 0)
+        aggregate.successCount = Number(aggregate.successCount || 0) + Number(result.successCount ?? result.importedCount ?? 0)
+        aggregate.duplicateCount = Number(aggregate.duplicateCount || 0) + Number(result.duplicateCount || 0)
+        aggregate.failedCount = Number(aggregate.failedCount || 0) + Number(result.failedCount || 0)
+        if (Array.isArray(result.errors) && result.errors.length) {
+          aggregate.errors?.push(...result.errors.map(error => formatImportFileError(file.name, error)))
+        }
+      } catch (error: unknown) {
+        const err = error as { message?: string }
+        failedFiles += 1
+        aggregate.failedCount = Number(aggregate.failedCount || 0) + 1
+        aggregate.errors?.push(`${file.name}：${err.message || '导入失败'}`)
+      } finally {
+        customerState().importProgress.completedFiles += 1
+        customerState().importProgress.percent = Math.round((customerState().importProgress.completedFiles / selectedFiles.length) * 100)
+      }
+    }
+
+    customerState().importResult = aggregate
     await Promise.allSettled([loadCustomers(), loadCustomerSummary()])
     onSuccess?.()
-    appState().notice = `客户 ${importLabel} 导入完成，已写入来源与客户资产主表`
+    if (failedFiles > 0) {
+      appState().error = `客户 ${importLabel} 导入完成，其中 ${failedFiles} 个文件上传失败`
+      appState().notice = selectedFiles.length > failedFiles
+        ? `已成功导入 ${selectedFiles.length - failedFiles} 个 ${importLabel} 文件`
+        : ''
+    } else {
+      appState().notice = selectedFiles.length > 1
+        ? `客户 ${importLabel} 导入完成，共处理 ${selectedFiles.length} 个文件`
+        : `客户 ${importLabel} 导入完成，已写入来源与客户资产主表`
+    }
   } catch (error: unknown) {
     const err = error as { message?: string }
     appState().error = `导入失败：${err.message}`
@@ -484,7 +544,23 @@ export async function runOsmMapping(): Promise<void> {
 
 export function onFileChange(event: Event): void {
   const target = event.target as HTMLInputElement
-  customerState().importFile = target.files?.[0] || null
+  const files = Array.from(target.files || [])
+  customerState().importFiles = files
+  customerState().importFile = files[0] || null
+  customerState().importProgress = {
+    totalFiles: 0,
+    completedFiles: 0,
+    currentFileName: '',
+    percent: 0
+  }
+}
+
+function formatImportFileError(fileName: string, error: string | { index?: number; externalId?: string; message?: string }): string {
+  if (typeof error === 'string') return `${fileName}：${error}`
+  const prefix = error.index !== undefined
+    ? `${fileName} 第 ${error.index} 条${error.externalId ? `（${error.externalId}）` : ''}：`
+    : `${fileName}：`
+  return `${prefix}${error.message || '导入失败'}`
 }
 
 export async function loadDictionaryCountries(): Promise<void> {

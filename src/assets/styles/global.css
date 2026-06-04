@@ -3254,6 +3254,48 @@ td span {
   gap: var(--card-inner-gap);
 }
 
+.import-progress {
+  display: grid;
+  gap: 7px;
+  border: 1px solid #cfe2df;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #f3fbf9;
+}
+
+.import-progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #0f4f49;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.import-progress-track {
+  overflow: hidden;
+  height: 8px;
+  border-radius: 999px;
+  background: #d8e7e5;
+}
+
+.import-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: #0f766e;
+  transition: width 180ms ease;
+}
+
+.import-progress small {
+  overflow: hidden;
+  color: #526170;
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .import-sample {
   display: grid;
   gap: var(--card-inner-gap);

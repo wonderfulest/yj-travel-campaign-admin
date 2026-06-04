@@ -105,8 +105,8 @@ X-Tenant-Secret: {{ state.tenantApiSecretKey || "yj_live_xxx" }}
       <section v-else-if="activeImportTab === 'json'" class="import-tab-panel" role="tabpanel">
         <div class="upload-box">
           <Braces :size="24" />
-          <input type="file" accept=".json,application/json" @change="onFileChange" />
-          <span>{{ state.importFile?.name || '选择客户 JSON 文件' }}</span>
+          <input type="file" accept=".json,application/json" multiple @change="onFileChange" />
+          <span>{{ selectedImportFileLabel('json') }}</span>
         </div>
         <section class="import-sample" aria-label="客户 JSON 示例结构">
           <div class="import-sample-header">
@@ -135,6 +135,7 @@ X-Tenant-Secret: {{ state.tenantApiSecretKey || "yj_live_xxx" }}
           <p>每条记录至少要有 name / email / phone / website 之一；externalId 有值时优先作为幂等键。</p>
         </section>
         <button class="secondary-action" type="button" :disabled="state.loading" @click="importCustomerFile('json')">导入 JSON</button>
+        <ImportProgress />
         <ImportResultSummary />
       </section>
 
@@ -146,7 +147,7 @@ X-Tenant-Secret: {{ state.tenantApiSecretKey || "yj_live_xxx" }}
             accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             @change="onFileChange"
           />
-          <span>{{ state.importFile?.name || '选择客户 Excel 文件' }}</span>
+          <span>{{ selectedImportFileLabel('excel') }}</span>
         </div>
         <section class="import-sample" aria-label="客户 Excel 模板">
           <div class="import-sample-header">
@@ -159,6 +160,7 @@ X-Tenant-Secret: {{ state.tenantApiSecretKey || "yj_live_xxx" }}
           <p>Excel 首行字段：externalId、name、email、phone、website、country、city、postcode、street、houseNumber、businessScope、longitude、latitude。</p>
         </section>
         <button class="secondary-action" type="button" :disabled="state.loading" @click="importCustomerFile('excel')">导入 Excel</button>
+        <ImportProgress />
         <ImportResultSummary />
       </section>
     </article>
@@ -198,8 +200,45 @@ const activeImportTab = ref<ImportTab>('api')
 function selectImportTab(tab: ImportTab): void {
   activeImportTab.value = tab
   state.importFile = null
+  state.importFiles = []
+  state.importProgress = {
+    totalFiles: 0,
+    completedFiles: 0,
+    currentFileName: '',
+    percent: 0
+  }
   state.importResult = null
 }
+
+function selectedImportFileLabel(type: 'json' | 'excel'): string {
+  const files = Array.isArray(state.importFiles) ? state.importFiles : []
+  if (files.length === 0) return type === 'json' ? '选择客户 JSON 文件，可多选' : '选择客户 Excel 文件'
+  if (files.length === 1) return files[0]?.name || ''
+  return `已选择 ${files.length} 个 JSON 文件，将按顺序逐个导入`
+}
+
+const ImportProgress = defineComponent({
+  name: 'ImportProgress',
+  setup() {
+    return () => {
+      const progress = state.importProgress
+      if (!state.loading || !progress?.totalFiles) return null
+      const percent = Math.min(100, Math.max(0, Number(progress.percent || 0)))
+      return h('div', { class: 'import-progress', role: 'status', 'aria-live': 'polite' }, [
+        h('div', { class: 'import-progress-meta' }, [
+          h('span', `导入进度 ${percent}%`),
+          h('span', `第 ${progress.completedFiles + 1 > progress.totalFiles ? progress.totalFiles : progress.completedFiles + 1}/${progress.totalFiles} 个文件`)
+        ]),
+        h('div', { class: 'import-progress-track', 'aria-hidden': 'true' }, [
+          h('div', { class: 'import-progress-fill', style: { width: `${percent}%` } })
+        ]),
+        progress.currentFileName
+          ? h('small', `正在导入：${progress.currentFileName}`)
+          : null
+      ])
+    }
+  }
+})
 
 const ImportResultSummary = defineComponent({
   name: 'ImportResultSummary',
