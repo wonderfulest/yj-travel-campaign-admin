@@ -7,10 +7,11 @@ export type ApiRequestOptions = {
 }
 
 export type TokenProvider = () => string
+export type UnauthorizedHandler = () => void
 
 export const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
-export function createApiRequest(getToken: TokenProvider) {
+export function createApiRequest(getToken: TokenProvider, onUnauthorized: UnauthorizedHandler = () => {}) {
   return async function request(path: string, options: ApiRequestOptions = {}) {
     const { method = 'GET', headers = {}, body } = options
 
@@ -50,10 +51,12 @@ export function createApiRequest(getToken: TokenProvider) {
         const text = res.data ?? ''
         const response = { headers: { get: (key: string) => res.headers[key.toLowerCase()] ?? '' } }
         const message = extractApiErrorMessage(response, text)
-        if (message) throw new Error(message)
         if (res.status === 401 || res.status === 403) {
+          onUnauthorized()
+          if (message) throw new Error(message)
           throw new Error('当前账号没有权限或登录已失效，请退出后使用 TENANT_OWNER / TENANT_ADMIN 账号重新登录')
         }
+        if (message) throw new Error(message)
         throw new Error(`HTTP ${res.status}`)
       }
       throw err
@@ -68,7 +71,7 @@ export function createApiRequest(getToken: TokenProvider) {
       } catch {
         return text
       }
-      return unwrapApiResponse(parsed)
+      return unwrapApiResponse(parsed, onUnauthorized)
     }
     return text
   }
@@ -88,9 +91,12 @@ export function extractApiErrorMessage(response: Pick<Response, 'headers'>, text
   return text
 }
 
-function unwrapApiResponse(parsed: unknown) {
+function unwrapApiResponse(parsed: unknown, onUnauthorized: UnauthorizedHandler) {
   if (!isApiEnvelope(parsed)) return parsed
   if (parsed.code !== 0) {
+    if (parsed.code === 401 || parsed.code === 403) {
+      onUnauthorized()
+    }
     throw new Error(parsed.msg || '请求处理失败')
   }
   return parsed.data

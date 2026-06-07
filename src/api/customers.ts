@@ -13,6 +13,8 @@ import type {
   MappingResult,
   TenantApiSecretRotationResult,
   TenantApiSecretStatus,
+  TenantEmailBlacklistEntry,
+  TenantEmailBlacklistForm,
   TenantSettings
 } from '../types'
 
@@ -91,6 +93,20 @@ export const customersApi = {
       method: 'POST',
       body: JSON.stringify(body)
     }) as Promise<TenantSettings>
+  },
+  listEmailBlacklist(): Promise<TenantEmailBlacklistEntry[]> {
+    return request('/api/tenant/email-blacklist') as Promise<TenantEmailBlacklistEntry[]>
+  },
+  addEmailBlacklistEntry(body: TenantEmailBlacklistForm): Promise<TenantEmailBlacklistEntry> {
+    return request('/api/tenant/email-blacklist', {
+      method: 'POST',
+      body: JSON.stringify(body)
+    }) as Promise<TenantEmailBlacklistEntry>
+  },
+  deleteEmailBlacklistEntry(id: string): Promise<void> {
+    return request(`/api/tenant/email-blacklist/${id}`, {
+      method: 'DELETE'
+    }) as Promise<void>
   },
   getMappingPreview(): Promise<MappingPreview> {
     return request('/api/customer-mapping/osm/preview') as Promise<MappingPreview>

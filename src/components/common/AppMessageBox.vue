@@ -43,7 +43,14 @@ function hideMessage(): void {
 
 function showMessage(type: AppMessageType, text: string): void {
   const normalized = text.trim()
-  if (!normalized) return
+  if (!normalized) {
+    hideMessage()
+    return
+  }
+  if (!appStore.isLoggedIn && type === 'error' && !normalized.startsWith('认证失败')) {
+    hideMessage()
+    return
+  }
   clearHideTimer()
   message.value = { type, text: normalized }
   hideTimer = window.setTimeout(hideMessage, type === 'error' ? 5200 : 3600)

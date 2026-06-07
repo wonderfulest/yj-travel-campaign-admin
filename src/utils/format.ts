@@ -74,6 +74,19 @@ export function formatLanguages(languages: unknown[]): string {
   return languages.map((item) => localizedName(item)).filter((item) => item && item !== '-').join('、') || '-'
 }
 
+export function formatDateTime(value: string | undefined): string {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
 interface Destination {
   country?: { id: string; name: unknown }
   city?: { name: unknown; country?: { id: string } }

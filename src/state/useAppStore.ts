@@ -37,10 +37,10 @@ export const useAppStore = defineStore('app', {
     user: JSON.parse(localStorage.getItem('travel_admin_user') || 'null') as User | null,
     authMode: 'login' as AuthMode,
     authForm: {
-      tenantName: 'Youjie Tech',
-      displayName: 'Owner',
-      email: 'owner@example.com',
-      password: 'secret123'
+      tenantName: '',
+      displayName: '',
+      email: '',
+      password: ''
     } as AuthForm,
     activeNav: initialAdminNav(),
     sidebarCollapsed: localStorage.getItem('travel_admin_sidebar_collapsed') === 'true',
@@ -182,6 +182,9 @@ export const useAppStore = defineStore('app', {
     logout() {
       this.token = ''
       this.user = null
+      this.loading = false
+      this.error = ''
+      this.notice = ''
       this.setCustomerToolState('list')
       this.activeNav = 'dashboard'
       localStorage.removeItem('travel_admin_token')
@@ -376,6 +379,9 @@ export async function login(onSuccess?: () => Promise<void>, store: ReturnType<t
 export function logout(store: ReturnType<typeof useAppStore>): void {
   store.token = ''
   store.user = null
+  store.loading = false
+  store.error = ''
+  store.notice = ''
   setCustomerToolState('list', store)
   store.activeNav = 'dashboard'
   localStorage.removeItem('travel_admin_token')

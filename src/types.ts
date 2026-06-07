@@ -119,6 +119,24 @@ export interface TenantApiSecretRotationResult {
 export interface TenantSettings {
   tenantId: string
   unsubscribePageUrl?: string
+  emailBlacklist?: TenantEmailBlacklistEntry[]
+}
+
+export type TenantEmailBlacklistType = 'EMAIL' | 'DOMAIN'
+
+export interface TenantEmailBlacklistEntry {
+  id: string
+  tenantId: string
+  type: TenantEmailBlacklistType
+  pattern: string
+  note?: string
+  createdAt?: string
+}
+
+export interface TenantEmailBlacklistForm {
+  type: TenantEmailBlacklistType
+  pattern: string
+  note: string
 }
 
 export interface CustomerSearchIndexSyncResult {
