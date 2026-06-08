@@ -200,7 +200,12 @@ export function fillSegmentForm(segment: Segment): void {
     description: segment.description || '',
     rules
   }
-  loadSegmentMembers(String(segment.id))
+  loadSegmentMembers(String(segment.id), 0)
+}
+
+export function selectSegment(segment: Segment): void {
+  segmentState().segmentRefreshResult = null
+  fillSegmentForm(segment)
 }
 
 export function resetSegmentForm(): void {

@@ -1498,6 +1498,20 @@ tr.selected td {
   background: #f0faf8;
 }
 
+tr.clickable-row {
+  cursor: pointer;
+}
+
+tr.clickable-row:hover td,
+tr.clickable-row:focus-visible td {
+  background: #f7fcfb;
+}
+
+tr.clickable-row:focus-visible {
+  outline: 3px solid rgba(15, 118, 110, 0.18);
+  outline-offset: -3px;
+}
+
 td strong {
   display: block;
   color: #13202b;

@@ -20,7 +20,18 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="segment in state.segments" :key="segment.id" :class="{ selected: state.selectedSegment?.id === segment.id }">
+            <tr
+              v-for="segment in state.segments"
+              :key="segment.id"
+              class="clickable-row"
+              :class="{ selected: state.selectedSegment?.id === segment.id }"
+              role="button"
+              tabindex="0"
+              :aria-label="`查看客群成员：${segment.name}`"
+              @click="selectSegment(segment)"
+              @keydown.enter.prevent="selectSegment(segment)"
+              @keydown.space.prevent="selectSegment(segment)"
+            >
               <td><strong>{{ segment.name }}</strong><span>{{ segment.description || '-' }}</span></td>
               <td>{{ segment.id }}</td>
               <td>
@@ -29,12 +40,12 @@
               </td>
               <td><span class="status">{{ segment.status }}</span></td>
               <td>
-                <button class="row-action" type="button" @click="openSegmentEditor(segment)">维护</button>
-                <button class="row-action" type="button" @click="refreshSegment(segment.id)">
+                <button class="row-action" type="button" @click.stop="openSegmentEditor(segment)">维护</button>
+                <button class="row-action" type="button" @click.stop="refreshSegment(segment.id)">
                   <RefreshCw :size="14" />
                   刷新成员
                 </button>
-                <button class="row-action danger" type="button" :disabled="state.loading" @click="confirmDeleteSegment(segment)">
+                <button class="row-action danger" type="button" :disabled="state.loading" @click.stop="confirmDeleteSegment(segment)">
                   删除
                 </button>
               </td>
@@ -256,6 +267,7 @@ import {
   ruleOpHasValue,
   ruleOpIsMulti,
   saveSegment,
+  selectSegment,
   useSegmentStore
 } from '../../state/useSegmentStore'
 import { formatWebsiteLabel, normalizedWebsiteUrl } from '../../utils/format'
